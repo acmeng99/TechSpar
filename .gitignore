@@ -1,0 +1,20 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# User data (personal, not for sharing)
+data/resume/
+data/user_profile/
+data/interviews.db
+
+# Generated / cache
+data/.index_cache/
+data/models/
+.DS_Store
