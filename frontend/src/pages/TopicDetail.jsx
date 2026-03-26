@@ -808,10 +808,10 @@ function toTimestamp(value) {
 }
 
 function getScoreColor(score) {
-  if (score >= 8) return "var(--green)";
+  if (score >= 8) return "var(--success)";
   if (score >= 6) return "var(--ai-glow)";
   if (score >= 4) return "#e2b93b";
-  return "var(--red)";
+  return "var(--destructive)";
 }
 
 function getScoreBg(score) {

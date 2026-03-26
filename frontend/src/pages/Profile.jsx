@@ -20,7 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 const MODE_META = {
   resume: { color: "var(--ai-glow)", label: "简历面试" },
-  topic_drill: { color: "var(--green)", label: "专项训练" },
+  topic_drill: { color: "var(--success)", label: "专项训练" },
   jd_prep: { color: "#60a5fa", label: "JD 备面" },
   recording: { color: "#22d3ee", label: "录音复盘" },
 };

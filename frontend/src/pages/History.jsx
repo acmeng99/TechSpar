@@ -442,7 +442,7 @@ function ScorePill({ score }) {
 
   if (score >= 8) {
     bg = "rgba(34,197,94,0.15)";
-    color = "var(--green)";
+    color = "var(--success)";
   } else if (score >= 6) {
     bg = "rgba(245,158,11,0.15)";
     color = "var(--ai-glow)";
@@ -451,7 +451,7 @@ function ScorePill({ score }) {
     color = "#e2b93b";
   } else {
     bg = "rgba(239,68,68,0.15)";
-    color = "var(--red)";
+    color = "var(--destructive)";
   }
 
   return (

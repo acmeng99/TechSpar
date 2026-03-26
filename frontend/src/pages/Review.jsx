@@ -8,10 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 
 function getScoreColor(score) {
-  if (score >= 8) return { bg: "rgba(34,197,94,0.15)", color: "var(--green)" };
+  if (score >= 8) return { bg: "rgba(34,197,94,0.15)", color: "var(--success)" };
   if (score >= 6) return { bg: "rgba(245,158,11,0.15)", color: "var(--ai-glow)" };
   if (score >= 4) return { bg: "rgba(253,203,110,0.2)", color: "#e2b93b" };
-  return { bg: "rgba(239,68,68,0.15)", color: "var(--red)" };
+  return { bg: "rgba(239,68,68,0.15)", color: "var(--destructive)" };
 }
 
 const RESUME_DIMENSION_LABELS = {
@@ -55,7 +55,7 @@ function DimensionScores({ dimensionScores, avgScore, labels }) {
         </div>
         {entries.map(([key, label]) => {
           const score = dimensionScores[key];
-          const color = score >= 8 ? "var(--green)" : score >= 6 ? "var(--ai-glow)" : score >= 4 ? "#e2b93b" : "var(--red)";
+          const color = score >= 8 ? "var(--success)" : score >= 6 ? "var(--ai-glow)" : score >= 4 ? "#e2b93b" : "var(--destructive)";
           return (
             <div key={key} className="flex items-center gap-3 mb-2.5">
               <div className="w-[90px] md:w-[110px] text-[13px] text-dim text-right shrink-0">{label}</div>
@@ -101,7 +101,7 @@ function SoloRecordingReview({ topicsCovered, overall }) {
         <CardContent className="p-5 md:p-8">
           <div className="text-lg font-semibold mb-3">整体评价</div>
           <div>
-            <span className="inline-block text-[32px] font-bold mr-2" style={{ color: typeof avgScore === "number" ? getScoreColor(avgScore).color : "var(--text)" }}>
+            <span className="inline-block text-[32px] font-bold mr-2" style={{ color: typeof avgScore === "number" ? getScoreColor(avgScore).color : "var(--foreground)" }}>
               {avgScore}
             </span>
             <span className="text-base text-dim">/10</span>
@@ -168,7 +168,7 @@ function DrillReview({ scores, overall, questions, answers, topic }) {
         <CardContent className="p-5 md:p-8">
           <div className="text-lg font-semibold mb-3">整体评价</div>
           <div className="flex items-center gap-1 mb-2">
-            <span className="inline-block text-[32px] font-bold" style={{ color: typeof avgScore === "number" ? getScoreColor(avgScore).color : "var(--text)" }}>
+            <span className="inline-block text-[32px] font-bold" style={{ color: typeof avgScore === "number" ? getScoreColor(avgScore).color : "var(--foreground)" }}>
               {avgScore}
             </span>
             <span className="text-base text-dim">/10</span>
@@ -303,7 +303,7 @@ function JobPrepReview({ scores, overall, questions, answers, meta }) {
               )}
             </div>
             <div className="text-right">
-              <div className="text-[32px] font-bold" style={{ color: typeof avgScore === "number" ? getScoreColor(avgScore).color : "var(--text)" }}>
+              <div className="text-[32px] font-bold" style={{ color: typeof avgScore === "number" ? getScoreColor(avgScore).color : "var(--foreground)" }}>
                 {avgScore}
               </div>
               <div className="text-sm text-dim">/10</div>
@@ -530,7 +530,7 @@ export default function Review() {
                     <CardContent className="p-4 md:p-6 max-h-[500px] overflow-y-auto">
                       {messages.map((msg, i) => (
                         <div key={i} className="py-2 border-b border-border text-sm leading-relaxed last:border-0">
-                          <strong style={{ color: msg.role === "user" ? "var(--ai-glow)" : "var(--green)" }}>
+                          <strong style={{ color: msg.role === "user" ? "var(--ai-glow)" : "var(--success)" }}>
                             {msg.role === "user" ? "你" : "面试官"}:
                           </strong>{" "}
                           {msg.content}
