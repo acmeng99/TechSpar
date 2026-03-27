@@ -691,10 +691,10 @@ async def update_profile_after_interview(
         )
 
     extract_msg = EXTRACT_PROMPT.format(
-        current_profile=json.dumps(profile, ensure_ascii=False)[:2000],
+        current_profile=json.dumps(profile, ensure_ascii=False),
         mode=mode,
         topic=topic or "综合",
-        transcript="\n".join(transcript_lines[-60:]),  # last 60 lines
+        transcript="\n".join(transcript_lines),
         scores=score_text or "无",
     )
 
