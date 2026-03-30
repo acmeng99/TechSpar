@@ -8,11 +8,11 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 
 const DIVERGENCE_OPTIONS = [
-  { value: 1, label: "聚焦薄弱" },
-  { value: 2, label: "侧重薄弱" },
-  { value: 3, label: "均衡" },
-  { value: 4, label: "侧重探索" },
-  { value: 5, label: "全面探索" },
+  { value: 1, label: "聚焦薄弱", description: "100% 针对存在弱点的知识域，适合考前专项突击" },
+  { value: 2, label: "侧重薄弱", description: "约 70% 针对薄弱点，30% 拓展至新知识点" },
+  { value: 3, label: "均衡", description: "薄弱环节巩固与全新知识盲区发掘各占 50%" },
+  { value: 4, label: "侧重探索", description: "约 30% 回顾薄弱点，70% 探索全新知识层面" },
+  { value: 5, label: "全面探索", description: "100% 探索未涉猎过的新知识领域，发掘潜在盲区" },
 ];
 
 export default function Settings() {
@@ -191,8 +191,8 @@ export default function Settings() {
                     </button>
                   ))}
                 </div>
-                <div className="text-[12px] text-dim/60">
-                  越靠左越聚焦已知薄弱点，越靠右越探索新知识领域
+                <div className="text-[12px] text-dim/70 mt-1 min-h-[18px]">
+                  {DIVERGENCE_OPTIONS.find((o) => o.value === divergence)?.description}
                 </div>
               </div>
             </div>
