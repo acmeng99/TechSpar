@@ -31,3 +31,6 @@ llm.md
 
 
 local_tools/
+
+# Internal design docs
+design/

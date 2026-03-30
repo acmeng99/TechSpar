@@ -96,3 +96,53 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
+
+
+# ── Copilot Models ──
+
+class StrategyNode(TypedDict, total=False):
+    id: str                     # "tech_01_python_gc"
+    topic: str                  # 考察维度
+    sample_questions: list[str] # 典型问题
+    intent: str                 # "technical" | "behavioral" | "project" | "pressure"
+    depth: int                  # 追问深度 0=入口, 1=追问, 2=深追
+    risk_level: str             # "safe" | "caution" | "danger"
+    children: list[str]         # 子节点 ID
+    trigger_condition: str      # 触发追问的回答特征
+    recommended_points: list[str]  # 建议回答要点
+
+
+class StrategyTree(TypedDict, total=False):
+    root_nodes: list[str]
+    nodes: dict[str, StrategyNode]
+    phase_order: list[str]
+
+
+class CopilotPrepState(TypedDict, total=False):
+    user_id: str
+    jd_text: str
+    resume_context: str
+    profile: dict
+
+    # Layer 0: 并行 Analyst 产出
+    company_report: str
+    jd_analysis: dict
+    fit_report: dict
+
+    # Layer 1: HR Strategy Simulator
+    question_strategy_tree: StrategyTree
+
+    # Layer 2: Risk Assessor
+    risk_map: list[dict]
+    prep_hints: list[dict]
+
+    # Prep 状态追踪
+    status: str              # "running" | "done" | "error"
+    progress: str            # 当前进度描述
+    error: str
+
+
+class CopilotPrepRequest(BaseModel):
+    jd_text: str
+    company: str | None = None
+    position: str | None = None

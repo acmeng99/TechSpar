@@ -1371,4 +1371,271 @@ async def get_interview_topics(user_id: str = Depends(get_current_user)):
     return list_distinct_topics(user_id=user_id)
 
 
+# ══════════════════════════════════════════════════════════════════
+# Copilot — 多 Agent 实时面试辅助
+# ══════════════════════════════════════════════════════════════════
+
+from fastapi import WebSocket, WebSocketDisconnect
+
+# Copilot prep sessions: prep_id → CopilotPrepState
+_copilot_preps: dict[str, dict] = {}
+# Copilot realtime sessions: session_id → {asr, navigator, prep, conversation}
+_copilot_sessions: dict[str, dict] = {}
+
+
+@router.post("/copilot/prep")
+async def start_copilot_prep(
+    background_tasks: BackgroundTasks,
+    jd_text: str = Form(...),
+    company: str = Form(""),
+    position: str = Form(""),
+    user_id: str = Depends(get_current_user),
+):
+    """启动 Copilot Prep Phase（后台异步执行）。"""
+    prep_id = uuid.uuid4().hex[:12]
+    _copilot_preps[prep_id] = {
+        "status": "running",
+        "progress": "初始化中...",
+        "error": "",
+        "result": None,
+    }
+
+    async def _run_prep():
+        from backend.graphs.copilot_prep import run_copilot_prep
+        try:
+            async def on_progress(text):
+                _copilot_preps[prep_id]["progress"] = text
+
+            result = await run_copilot_prep(
+                jd_text=jd_text,
+                user_id=user_id,
+                company=company,
+                position=position,
+                on_progress=on_progress,
+            )
+            _copilot_preps[prep_id]["result"] = result
+            _copilot_preps[prep_id]["status"] = "done"
+            _copilot_preps[prep_id]["progress"] = "准备完成"
+        except Exception as e:
+            logger.error(f"Copilot prep failed: {e}", exc_info=True)
+            _copilot_preps[prep_id]["status"] = "error"
+            _copilot_preps[prep_id]["error"] = str(e)
+
+    background_tasks.add_task(_run_prep)
+    return {"prep_id": prep_id}
+
+
+@router.get("/copilot/prep/{prep_id}")
+async def get_copilot_prep_status(prep_id: str, user_id: str = Depends(get_current_user)):
+    """查询 Copilot Prep 进度和结果。"""
+    data = _copilot_preps.get(prep_id)
+    if not data:
+        raise HTTPException(404, "Prep session not found")
+    resp = {
+        "status": data["status"],
+        "progress": data["progress"],
+        "error": data.get("error", ""),
+    }
+    if data["status"] == "done" and data.get("result"):
+        result = data["result"]
+        resp["company_report"] = result.get("company_report", "")
+        resp["jd_analysis"] = result.get("jd_analysis", {})
+        resp["fit_report"] = result.get("fit_report", {})
+        resp["risk_map"] = result.get("risk_map", [])
+        resp["prep_hints"] = result.get("prep_hints", [])
+    return resp
+
+
+@router.get("/copilot/prep/{prep_id}/tree")
+async def get_copilot_strategy_tree(prep_id: str, user_id: str = Depends(get_current_user)):
+    """获取策略树（前端可视化用）。"""
+    data = _copilot_preps.get(prep_id)
+    if not data or data["status"] != "done" or not data.get("result"):
+        raise HTTPException(404, "Prep not ready")
+    return data["result"].get("question_strategy_tree", {})
+
+
+@app.websocket("/ws/copilot/{session_id}")
+async def copilot_realtime_ws(ws: WebSocket, session_id: str):
+    """Copilot 实时面试辅助 WebSocket。
+
+    客户端发送:
+      - JSON {"type": "start", "prep_id": "..."} 开始会话
+      - Binary PCM 音频帧
+      - JSON {"type": "manual", "text": "..."} 手动输入 HR 发言
+      - JSON {"type": "stop"} 结束
+    服务端发送:
+      - JSON {"type": "asr_interim", "text": "..."} 中间结果
+      - JSON {"type": "asr_final", "text": "..."} 句末结果
+      - JSON {"type": "copilot_update", ...} 分析结果
+      - JSON {"type": "risk_alert", ...} 风险警告
+      - JSON {"type": "error", "message": "..."} 错误
+    """
+    await ws.accept()
+    session = None
+
+    try:
+        while True:
+            data = await ws.receive()
+
+            # Binary frame → PCM audio
+            if data.get("type") == "websocket.receive" and data.get("bytes"):
+                if session and session.get("asr"):
+                    session["asr"].send_audio(data["bytes"])
+                continue
+
+            # Text frame → JSON control message
+            raw = data.get("text", "")
+            if not raw:
+                continue
+            try:
+                msg = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+
+            msg_type = msg.get("type", "")
+
+            if msg_type == "start":
+                session = await _init_copilot_session(ws, msg.get("prep_id", ""), session_id)
+                _copilot_sessions[session_id] = session
+                await ws.send_json({"type": "started", "session_id": session_id})
+
+            elif msg_type == "manual" and session:
+                # 手动输入 HR 发言（ASR 降级 / 补充）
+                text = msg.get("text", "").strip()
+                if text:
+                    await ws.send_json({"type": "asr_final", "text": text})
+                    await _process_hr_utterance(ws, session, text)
+
+            elif msg_type == "stop":
+                if session and session.get("asr"):
+                    session["asr"].stop()
+                await ws.send_json({"type": "stopped"})
+                break
+
+    except WebSocketDisconnect:
+        logger.info(f"Copilot WS disconnected: {session_id}")
+    except Exception as e:
+        logger.error(f"Copilot WS error: {e}", exc_info=True)
+        try:
+            await ws.send_json({"type": "error", "message": str(e)})
+        except Exception:
+            pass
+    finally:
+        if session and session.get("asr"):
+            session["asr"].shutdown()
+        _copilot_sessions.pop(session_id, None)
+
+
+async def _init_copilot_session(ws: WebSocket, prep_id: str, session_id: str) -> dict:
+    """初始化 Copilot 实时会话。"""
+    from backend.copilot.strategy_tree import StrategyTreeNavigator
+
+    prep_data = _copilot_preps.get(prep_id)
+    if not prep_data or prep_data["status"] != "done" or not prep_data.get("result"):
+        raise ValueError("Prep session not ready")
+
+    prep_result = prep_data["result"]
+    tree = prep_result.get("question_strategy_tree", {})
+
+    navigator = StrategyTreeNavigator(tree)
+    await ws.send_json({"type": "progress", "message": "正在预计算策略树 embedding..."})
+    await navigator.precompute_embeddings()
+
+    # 尝试启动 ASR（可选，失败不阻塞）
+    asr = None
+    if settings.nls_appkey and settings.nls_access_key_id:
+        try:
+            from backend.copilot.asr_stream import CopilotASR
+            loop = asyncio.get_event_loop()
+            asr = CopilotASR(loop)
+
+            async def on_interim(text):
+                try:
+                    await ws.send_json({"type": "asr_interim", "text": text})
+                except Exception:
+                    pass
+
+            async def on_sentence_end(text):
+                try:
+                    await ws.send_json({"type": "asr_final", "text": text})
+                    await _process_hr_utterance(ws, _copilot_sessions.get(session_id, {}), text)
+                except Exception as e:
+                    logger.error(f"ASR sentence processing failed: {e}")
+
+            async def on_error(message):
+                try:
+                    await ws.send_json({"type": "error", "message": f"ASR: {message}"})
+                except Exception:
+                    pass
+
+            asr.on_interim = on_interim
+            asr.on_sentence_end = on_sentence_end
+            asr.on_error = on_error
+            asr.start()
+            await ws.send_json({"type": "progress", "message": "语音识别已就绪"})
+        except Exception as e:
+            logger.warning(f"ASR init failed (will use manual input): {e}")
+            asr = None
+            await ws.send_json({"type": "progress", "message": "语音识别不可用，请使用手动输入"})
+    else:
+        await ws.send_json({"type": "progress", "message": "未配置语音识别，请使用手动输入"})
+
+    return {
+        "asr": asr,
+        "navigator": navigator,
+        "prep": prep_result,
+        "conversation": [],
+    }
+
+
+async def _process_hr_utterance(ws: WebSocket, session: dict, text: str):
+    """处理 HR 的一句话：意图分类 → 追问预测 + 回答建议（并行）。"""
+    from backend.copilot.intent_classifier import classify_intent
+    from backend.copilot.direction_predictor import predict_directions
+    from backend.copilot.answer_advisor import advise_answer
+
+    navigator = session.get("navigator")
+    prep = session.get("prep", {})
+    conversation = session.get("conversation", [])
+
+    conversation.append({"role": "hr", "text": text})
+
+    # Step 1: Intent Classification (<200ms)
+    intent_result = await classify_intent(text, navigator)
+    node_id = intent_result.get("node_id")
+    intent = intent_result.get("intent", "unknown")
+
+    # Step 2: Predictor + Advisor 并行
+    pred_task = asyncio.create_task(
+        predict_directions(navigator, node_id, conversation)
+    )
+    advice_task = asyncio.create_task(
+        advise_answer(text, node_id, navigator, prep)
+    )
+
+    predictions, advice = await asyncio.gather(pred_task, advice_task)
+
+    # 发送分析结果
+    node = navigator.get_node(node_id) if node_id else None
+    await ws.send_json({
+        "type": "copilot_update",
+        "intent": intent,
+        "tree_position": node_id,
+        "topic": node.get("topic", "") if node else "",
+        "confidence": intent_result.get("confidence", 0),
+        "predictions": predictions,
+        "answer_hints": advice.get("hints", []),
+    })
+
+    # 风险警告单独发送（如果有）
+    risk_alert = advice.get("risk_alert")
+    if risk_alert:
+        await ws.send_json({
+            "type": "risk_alert",
+            "message": risk_alert,
+            "node_id": node_id,
+        })
+
+
 app.include_router(router)

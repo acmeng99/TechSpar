@@ -21,8 +21,23 @@ class Settings(BaseSettings):
     local_embedding_path: str = ""
     embedding_model: str = ""  # deprecated fallback for EMBEDDING_MODEL
 
-    # DashScope ASR (speech-to-text)
+    # DashScope ASR (speech-to-text, batch transcription)
     dashscope_api_key: str = ""
+
+    # Copilot — 独立 LLM 配置（可选，不填则 fallback 到主 LLM）
+    copilot_api_base: str = ""
+    copilot_api_key: str = ""
+    copilot_model: str = ""
+    copilot_temperature: float = 0.3  # Copilot 场景偏确定性
+
+    # Copilot — 阿里云 NLS 实时语音识别
+    nls_url: str = "wss://nls-gateway-cn-shanghai.aliyuncs.com/ws/v1"
+    nls_appkey: str = ""
+    nls_access_key_id: str = ""
+    nls_access_key_secret: str = ""
+
+    # Copilot — Tavily Web Search
+    tavily_api_key: str = ""
 
     # Qiniu OSS (for uploading audio to get public URL)
     qiniu_access_key: str = ""

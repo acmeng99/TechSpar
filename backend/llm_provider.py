@@ -18,6 +18,17 @@ def get_langchain_llm():
     )
 
 
+def get_copilot_llm(streaming: bool = False):
+    """Copilot 专用 LLM，fallback 到主 LLM。"""
+    return ChatOpenAI(
+        model=settings.copilot_model or settings.model,
+        api_key=settings.copilot_api_key or settings.api_key,
+        base_url=settings.copilot_api_base or settings.api_base,
+        temperature=settings.copilot_temperature,
+        streaming=streaming,
+    )
+
+
 def get_llama_llm():
     """LlamaIndex LLM (singleton)."""
     global _llama_llm_instance

@@ -30,6 +30,16 @@ qiniu>=7.12.0
 bcrypt>=4.0.0
 python-jose[cryptography]>=3.3.0
 
+# Web search (Copilot Company Researcher)
+tavily-python>=0.3.0
+
+# Aliyun NLS token refresh (Copilot ASR)
+aliyun-python-sdk-core>=2.13.0
+
+# NLS Python SDK (实时语音识别) — 需从源码安装:
+#   git clone https://github.com/aliyun/alibabacloud-nls-python-sdk.git
+#   cd alibabacloud-nls-python-sdk && pip install -r requirements.txt && pip install .
+
 # Utils
 python-dotenv>=1.0.0
 pydantic>=2.0.0
