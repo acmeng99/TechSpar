@@ -38,7 +38,7 @@ export default function TopicDrill() {
   };
 
   return (
-    <div className="flex-1 w-full max-w-[700px] mx-auto px-4 py-6 md:px-7 md:py-8">
+    <div className="flex-1 w-full max-w-[960px] mx-auto px-4 py-6 md:px-7 md:py-8">
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-2">
           <Target size={20} className="text-green" />
@@ -55,13 +55,13 @@ export default function TopicDrill() {
       </div>
 
       {pageLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2.5 mb-8">
           {Array.from({ length: 4 }).map((_, i) => (
             <Skeleton key={i} className="h-[72px] rounded-xl" />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3 mb-8 stagger-children">
+        <div className="grid grid-cols-2 md:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2.5 mb-8 stagger-children">
           {Object.entries(topics).map(([key, info]) => (
             <TopicCard
               key={key}

@@ -1,18 +1,58 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileText } from "lucide-react";
-import { getResumeStatus, uploadResume, startInterview } from "../api/interview";
+import { FileText, ChevronRight, CalendarDays } from "lucide-react";
+import { getResumeStatus, uploadResume, startInterview, getHistory } from "../api/interview";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTaskStatus } from "../contexts/TaskStatusContext";
+
+const INTERVIEW_STEPS = [
+  { title: "自我介绍", desc: "根据简历准备 1-2 分钟的自我介绍" },
+  { title: "项目深挖", desc: "面试官针对简历中的项目经历追问细节" },
+  { title: "技术追问", desc: "基于项目涉及的技术栈深入考察" },
+  { title: "总结反馈", desc: "AI 给出综合评分和改进建议" },
+];
+
+function ScorePill({ score }) {
+  if (score == null) {
+    return (
+      <Badge variant="secondary" className="min-w-[60px] justify-center rounded-full px-2.5 py-0.5 text-[12px]">
+        未评分
+      </Badge>
+    );
+  }
+  let bg, color;
+  if (score >= 8) { bg = "rgba(34,197,94,0.15)"; color = "var(--success)"; }
+  else if (score >= 6) { bg = "rgba(245,158,11,0.15)"; color = "var(--ai-glow)"; }
+  else if (score >= 4) { bg = "rgba(253,203,110,0.2)"; color = "#e2b93b"; }
+  else { bg = "rgba(239,68,68,0.15)"; color = "var(--destructive)"; }
+  return (
+    <Badge
+      variant="outline"
+      className="min-w-[60px] justify-center rounded-full px-2.5 py-0.5 font-semibold text-[12px] shadow-sm"
+      style={{ background: bg, borderColor: "transparent", color }}
+    >
+      {score}/10
+    </Badge>
+  );
+}
+
+function formatDate(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
 
 export default function ResumeInterview() {
   const navigate = useNavigate();
   const [resumeFile, setResumeFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
+  const [history, setHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const { creatingSessionMode, setCreatingSessionMode } = useTaskStatus();
   const loading = creatingSessionMode === "resume";
 
@@ -23,6 +63,11 @@ export default function ResumeInterview() {
       })
       .catch(() => {})
       .finally(() => setPageLoading(false));
+
+    getHistory(3, 0, "resume")
+      .then((data) => setHistory(data.items || []))
+      .catch(() => {})
+      .finally(() => setHistoryLoading(false));
   }, []);
 
   const handleUpload = async (e) => {
@@ -130,6 +175,69 @@ export default function ResumeInterview() {
           开始模拟面试
         </Button>
       )}
+
+      {/* 面试流程预览 */}
+      <div className="mt-10">
+        <div className="text-[15px] font-semibold text-text mb-4">面试流程</div>
+        <div className="relative pl-8">
+          {INTERVIEW_STEPS.map((step, i) => (
+            <div key={i} className="relative pb-6 last:pb-0">
+              {i < INTERVIEW_STEPS.length - 1 && (
+                <div className="absolute left-[-20.5px] top-7 bottom-0 w-px bg-border" />
+              )}
+              <div className="absolute left-[-26px] top-0.5 w-[11px] h-[11px] rounded-full border-2 border-primary bg-card" />
+              <div className="text-[14px] font-medium text-text">{step.title}</div>
+              <div className="text-[13px] text-dim mt-0.5">{step.desc}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 历史面试记录 */}
+      <div className="mt-10 mb-4">
+        <div className="flex items-center justify-between mb-4">
+          <div className="text-[15px] font-semibold text-text">最近面试</div>
+          {history.length > 0 && (
+            <button
+              onClick={() => navigate("/history")}
+              className="text-[13px] text-dim hover:text-primary transition-colors flex items-center gap-0.5"
+            >
+              查看全部 <ChevronRight size={14} />
+            </button>
+          )}
+        </div>
+
+        {historyLoading ? (
+          <div className="flex flex-col gap-3">
+            {[1, 2].map((i) => <Skeleton key={i} className="h-[56px] rounded-xl" />)}
+          </div>
+        ) : history.length === 0 ? (
+          <div className="text-center py-8 text-[13px] text-dim">
+            还没有面试记录，上传简历开始第一次模拟吧
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2.5">
+            {history.map((s) => (
+              <Card
+                key={s.session_id}
+                className="cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => navigate(`/review/${s.session_id}`)}
+              >
+                <CardContent className="p-3.5 md:p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center gap-1.5 text-[12px] text-dim tabular-nums shrink-0">
+                      <CalendarDays size={13} />
+                      {formatDate(s.created_at)}
+                    </div>
+                    <ScorePill score={s.avg_score} />
+                  </div>
+                  <ChevronRight size={16} className="text-dim shrink-0" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
