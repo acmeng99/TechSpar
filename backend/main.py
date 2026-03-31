@@ -1441,10 +1441,13 @@ async def get_interview_topics(user_id: str = Depends(get_current_user)):
 
 from fastapi import WebSocket, WebSocketDisconnect
 
-# Copilot prep sessions: prep_id → CopilotPrepState
-_copilot_preps: dict[str, dict] = {}
+from backend.storage import copilot_preps as prep_store
+
 # Copilot realtime sessions: session_id → {asr, navigator, prep, conversation}
 _copilot_sessions: dict[str, dict] = {}
+
+# Reset any preps stuck in 'running' from a previous server run
+prep_store.reset_stale_running()
 
 
 @router.post("/copilot/prep")
@@ -1457,23 +1460,13 @@ async def start_copilot_prep(
 ):
     """启动 Copilot Prep Phase（后台异步执行）。"""
     prep_id = uuid.uuid4().hex[:12]
-    _copilot_preps[prep_id] = {
-        "user_id": user_id,
-        "company": company,
-        "position": position,
-        "jd_text": jd_text[:200],  # 摘要用于列表展示
-        "created_at": datetime.now().isoformat(),
-        "status": "running",
-        "progress": "初始化中...",
-        "error": "",
-        "result": None,
-    }
+    prep_store.create_prep(prep_id, user_id, company, position, jd_text)
 
     async def _run_prep():
         from backend.graphs.copilot_prep import run_copilot_prep
         try:
             async def on_progress(text):
-                _copilot_preps[prep_id]["progress"] = text
+                prep_store.update_progress(prep_id, text)
 
             result = await run_copilot_prep(
                 jd_text=jd_text,
@@ -1482,13 +1475,10 @@ async def start_copilot_prep(
                 position=position,
                 on_progress=on_progress,
             )
-            _copilot_preps[prep_id]["result"] = result
-            _copilot_preps[prep_id]["status"] = "done"
-            _copilot_preps[prep_id]["progress"] = "准备完成"
+            prep_store.set_done(prep_id, result)
         except Exception as e:
             logger.error(f"Copilot prep failed: {e}", exc_info=True)
-            _copilot_preps[prep_id]["status"] = "error"
-            _copilot_preps[prep_id]["error"] = str(e)
+            prep_store.set_error(prep_id, str(e))
 
     background_tasks.add_task(_run_prep)
     return {"prep_id": prep_id}
@@ -1497,44 +1487,41 @@ async def start_copilot_prep(
 @router.get("/copilot/preps")
 async def list_copilot_preps(user_id: str = Depends(get_current_user)):
     """列出当前用户的所有 Copilot Prep 会话。"""
-    items = []
-    for prep_id, data in _copilot_preps.items():
-        if data.get("user_id") != user_id:
-            continue
-        items.append({
-            "prep_id": prep_id,
-            "company": data.get("company", ""),
-            "position": data.get("position", ""),
-            "jd_excerpt": data.get("jd_text", "")[:80],
-            "status": data["status"],
-            "progress": data.get("progress", ""),
-            "created_at": data.get("created_at", ""),
-        })
-    # 按创建时间降序
-    items.sort(key=lambda x: x.get("created_at", ""), reverse=True)
-    return items
+    rows = prep_store.list_preps(user_id)
+    return [
+        {
+            "prep_id": r["prep_id"],
+            "company": r["company"],
+            "position": r["position"],
+            "jd_excerpt": r["jd_text"][:80],
+            "status": r["status"],
+            "progress": r["progress"],
+            "created_at": r["created_at"],
+        }
+        for r in rows
+    ]
 
 
 @router.delete("/copilot/prep/{prep_id}")
 async def delete_copilot_prep(prep_id: str, user_id: str = Depends(get_current_user)):
     """删除一个 Copilot Prep 会话。"""
-    data = _copilot_preps.get(prep_id)
-    if not data or data.get("user_id") != user_id:
+    if not prep_store.delete_prep(prep_id, user_id):
         raise HTTPException(404, "Prep session not found")
-    del _copilot_preps[prep_id]
     return {"ok": True}
 
 
 @router.get("/copilot/prep/{prep_id}")
 async def get_copilot_prep_status(prep_id: str, user_id: str = Depends(get_current_user)):
     """查询 Copilot Prep 进度和结果。"""
-    data = _copilot_preps.get(prep_id)
+    data = prep_store.get_prep(prep_id, user_id)
     if not data:
         raise HTTPException(404, "Prep session not found")
     resp = {
         "status": data["status"],
         "progress": data["progress"],
         "error": data.get("error", ""),
+        "company": data.get("company", ""),
+        "position": data.get("position", ""),
     }
     if data["status"] == "done" and data.get("result"):
         result = data["result"]
@@ -1550,7 +1537,7 @@ async def get_copilot_prep_status(prep_id: str, user_id: str = Depends(get_curre
 @router.get("/copilot/prep/{prep_id}/tree")
 async def get_copilot_strategy_tree(prep_id: str, user_id: str = Depends(get_current_user)):
     """获取策略树（前端可视化用）。"""
-    data = _copilot_preps.get(prep_id)
+    data = prep_store.get_prep(prep_id, user_id)
     if not data or data["status"] != "done" or not data.get("result"):
         raise HTTPException(404, "Prep not ready")
     return data["result"].get("question_strategy_tree", {})

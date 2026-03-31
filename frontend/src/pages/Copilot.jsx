@@ -229,6 +229,8 @@ function DetailView({ prepId: initialPrepId, onBack, onStartInterview }) {
       try {
         const data = await getCopilotPrepStatus(initialPrepId);
         setStatus(data);
+        if (data.company) setCompany(data.company);
+        if (data.position) setPosition(data.position);
       } catch (e) { setError(e.message); }
     };
     loadStatus();
