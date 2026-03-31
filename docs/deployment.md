@@ -101,7 +101,33 @@ docker compose up --build
 http://localhost
 ```
 
-### 6. 录音转写的额外配置
+### 6. 面试 Copilot 的额外配置
+
+如果你要启用 Copilot 的独立模型、实时语音识别或联网公司搜索，还需要补齐这些可选项：
+
+```env
+COPILOT_API_BASE=
+COPILOT_API_KEY=
+COPILOT_MODEL=
+NLS_APPKEY=
+NLS_ACCESS_KEY_ID=
+NLS_ACCESS_KEY_SECRET=
+TAVILY_API_KEY=
+```
+
+这些变量的作用分别是：
+
+* `COPILOT_API_BASE` / `COPILOT_API_KEY` / `COPILOT_MODEL`：给 Copilot 单独指定一套 OpenAI 兼容模型配置。不填时会回退到主 LLM。
+* `NLS_APPKEY` / `NLS_ACCESS_KEY_ID` / `NLS_ACCESS_KEY_SECRET`：给 Copilot 的**实时语音识别**使用。不配时，Copilot 仍可用，但只能手动输入 HR 的问题。
+* `TAVILY_API_KEY`：给 Copilot Prep 阶段的**公司联网搜索**使用。不配时不会整段报废，但公司情报会退化成“跳过联网搜索”。
+
+额外注意：
+
+* 启用 `NLS_*` 不只要填环境变量，还要额外安装阿里云 NLS Python SDK。
+* 如果你只是想先用 Copilot，看 JD 分析、匹配分析和策略树，`NLS_*` 和 `TAVILY_API_KEY` 都不是强制项。
+* 这些值怎么申请、控制台里去哪里找，统一看 [外部服务配置](external-services.md)。
+
+### 7. 录音转写的额外配置
 
 如果你要使用“上传录音 -> 自动转写”这条链路，还需要补齐：
 
@@ -116,16 +142,17 @@ QINIU_DOMAIN=
 这些变量不是可有可无的一半配置，而是同一条链路里的两段能力：
 
 * `DASHSCOPE_API_KEY`：阿里云 DashScope 的语音转写能力。
-* `QINIU_ACCESS_KEY`
-* `QINIU_SECRET_KEY`
-* `QINIU_BUCKET`
-* `QINIU_DOMAIN`
+* `QINIU_ACCESS_KEY` / `QINIU_SECRET_KEY`：上传到七牛所需的访问凭证。
+* `QINIU_BUCKET`：目标存储空间。
+* `QINIU_DOMAIN`：七牛对外访问域名。这里应该填完整域名前缀，例如 `https://cdn.example.com`。
 
 当前代码的转写流程是：**先把音频传到七牛拿公网 URL，再把 URL 交给 DashScope 转写**。所以如果你要走“上传录音并自动转写”，`DASHSCOPE_API_KEY` 和整组 `QINIU_*` 都要配置。
 
 如果这些没配，也不影响主要训练流程；录音复盘可以直接粘贴逐字稿文本。
 
-### 7. 线上部署注意事项
+这些值怎么申请、控制台里去哪里找，统一看 [外部服务配置](external-services.md)。
+
+### 8. 线上部署注意事项
 
 * 手动开发模式下，前端默认是 `5173`，后端是 `8000`。
 * Docker 模式下，前端默认对外暴露 `80` 端口。

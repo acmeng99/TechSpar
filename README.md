@@ -300,6 +300,8 @@ python -m backend.migrate
 - **Embedding 后端切换（API / 本地）**
 - **面试 Copilot（JD 预处理、策略树、高危路径、实时回答建议）**
 - **Copilot 独立 LLM / 阿里云 NLS / Tavily 检索**
+- **题目图谱与领域回顾**
+- **运行中设置调整（LLM、专项训练参数、Copilot 预测 Agent）**
 - **录音上传与转写分析**
 - **七牛云 OSS 存储**
 - **多用户数据隔离**
@@ -321,49 +323,22 @@ python -m backend.migrate
 
 ## 项目结构
 
-```text
-TechSpar/
-├── backend/
-│   ├── main.py
-│   ├── auth.py
-│   ├── memory.py
-│   ├── vector_memory.py
-│   ├── indexer.py
-│   ├── spaced_repetition.py
-│   ├── migrate.py
-│   ├── copilot/
-│   ├── graphs/
-│   │   ├── resume_interview.py
-│   │   ├── topic_drill.py
-│   │   ├── job_prep.py
-│   │   └── copilot_prep.py
-│   ├── prompts/
-│   └── storage/sessions.py
-├── frontend/src/
-│   ├── App.jsx
-│   ├── contexts/AuthContext.jsx
-│   ├── components/
-│   ├── hooks/useCopilotStream.js
-│   ├── pages/
-│   └── api/
-│       ├── interview.js
-│       └── copilot.js
-├── data/users/{user_id}/
-│   ├── profile/profile.json
-│   ├── resume/
-│   ├── knowledge/
-│   └── topics.json
-├── docker-compose.yml
-├── requirements.txt
-├── requirements.local-embedding.txt
-└── .env.example
-```
+为了避免文档继续变成过时快照，这里只保留稳定结构：
+
+- `backend/main.py`：FastAPI 入口和主要接口
+- `backend/graphs/`：简历面试、专项训练、JD 备面、录音复盘、Copilot 预处理等核心流程
+- `backend/copilot/`：实时辅助相关的策略树、方向预测、回答建议、语音流处理
+- `backend/storage/`：会话、Copilot prep 等持久化
+- `frontend/src/pages/`：首页、训练、画像、图谱、题库、Copilot、设置、复盘等页面
+- `frontend/src/api/`、`frontend/src/contexts/`、`frontend/src/hooks/`：接口封装、全局状态和实时交互逻辑
+- `data/users/{user_id}/`：每个用户的画像、简历、知识库、题库和设置
+- `docker-compose.yml`、`requirements*.txt`、`.env.example`：部署和运行入口
 
 ---
 
 ## License
 
-MIT
+CC BY-NC 4.0
 
 ---
 
