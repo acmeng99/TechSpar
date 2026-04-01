@@ -594,7 +594,7 @@ function LoopVisual() {
         </div>
       </div>
 
-      <div className="relative hidden h-[700px] md:block">
+      <div className="relative hidden h-[760px] md:block">
         <div className="absolute inset-0 rounded-[36px] border border-border/80 bg-card/82 shadow-[0_30px_100px_rgba(15,23,42,0.08)] backdrop-blur-sm" />
         <div className="absolute inset-y-8 left-8 right-[36%] rounded-[32px] border border-primary/10 bg-gradient-to-br from-primary/[0.035] via-transparent to-teal/[0.045]" />
 
@@ -688,7 +688,7 @@ function LoopVisual() {
           </div>
         </div>
 
-        <div className="absolute bottom-8 left-8 right-[36%] flex justify-center">
+        <div className="absolute bottom-14 left-8 right-[36%] flex justify-center">
           <div className="rounded-full border border-primary/15 bg-bg/88 px-4 py-3 text-center text-sm text-dim shadow-sm backdrop-blur-sm">
             训练 → 评估 → 画像更新 → 下一轮更精准
           </div>
