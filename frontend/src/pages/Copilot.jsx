@@ -35,6 +35,8 @@ if (typeof document !== "undefined" && !document.getElementById(COPILOT_STYLE_ID
     @keyframes copilot-shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
     @keyframes copilot-breathe { 0%, 100% { opacity: 0.5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.35); } }
     @keyframes copilot-connection-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.4); } 50% { box-shadow: 0 0 0 6px rgba(34,197,94,0); } }
+    @keyframes copilot-blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+    .copilot-blink { animation: copilot-blink 0.9s step-end infinite; }
     .copilot-fade-up { animation: copilot-fade-up 0.45s cubic-bezier(0.16,1,0.3,1) both; }
     .copilot-stagger-1 { animation-delay: 0.05s; }
     .copilot-stagger-2 { animation-delay: 0.1s; }
@@ -754,6 +756,7 @@ function RealtimePhase({ prepId, onBack }) {
   const [riskAlert, setRiskAlert] = useState(null);
   const [streamingAnswer, setStreamingAnswer] = useState("");
   const [answerLoading, setAnswerLoading] = useState(false);
+  const [answerStreaming, setAnswerStreaming] = useState(false);
   const [hrProfile, setHrProfile] = useState(null);
   const [monitorData, setMonitorData] = useState(null);
   const [perfMetrics, setPerfMetrics] = useState(null);
@@ -769,17 +772,20 @@ function RealtimePhase({ prepId, onBack }) {
         setCurrentUpdate(msg);
         setStreamingAnswer("");
         setAnswerLoading(true);
+        setAnswerStreaming(false);
         setPerfMetrics(null);
         break;
       case "answer_chunk":
         setStreamingAnswer((prev) => prev + (msg.text || ""));
         setAnswerLoading(false);
+        setAnswerStreaming(true);
         break;
       case "answer_meta":
         setPerfMetrics((prev) => ({ ...prev, warming: false, firstTokenMs: msg.first_token_ms }));
         break;
       case "answer_done":
         setAnswerLoading(false);
+        setAnswerStreaming(false);
         setPerfMetrics((prev) => ({ ...prev, warming: false, totalMs: msg.total_ms, chunkCount: msg.chunk_count }));
         break;
       case "hr_profile_update": setHrProfile(msg); break;
@@ -984,7 +990,7 @@ function RealtimePhase({ prepId, onBack }) {
 
         {/* ── Right: Copilot Panel (始终显示) ── */}
         <div className="w-[340px] xl:w-[420px] shrink-0 overflow-y-auto bg-card/[0.03] border-l border-border/50">
-          <CopilotPanel update={currentUpdate} riskAlert={riskAlert} streamingAnswer={streamingAnswer} answerLoading={answerLoading} monitorData={monitorData} />
+          <CopilotPanel update={currentUpdate} riskAlert={riskAlert} streamingAnswer={streamingAnswer} answerLoading={answerLoading} answerStreaming={answerStreaming} monitorData={monitorData} />
         </div>
       </div>
     </div>
@@ -1007,7 +1013,7 @@ function PanelEmptyState({ active = false }) {
   );
 }
 
-function CopilotPanel({ update, riskAlert, streamingAnswer, answerLoading, monitorData }) {
+function CopilotPanel({ update, riskAlert, streamingAnswer, answerLoading, answerStreaming, monitorData }) {
   const recommendedPoints = update?.recommended_points || [];
   const children = update?.children || [];
   const prepHint = update?.prep_hint;
@@ -1113,16 +1119,36 @@ function CopilotPanel({ update, riskAlert, streamingAnswer, answerLoading, monit
       {/* 参考答案 */}
       <div className="copilot-fade-up copilot-stagger-3 group">
         <div className="flex items-center gap-2.5 mb-2">
-          <div className={cn("flex items-center justify-center w-6 h-6 rounded-md", (answerLoading || streamingAnswer) ? "bg-green/10 text-green" : "bg-dim/10 text-dim/40")}>
-            <CheckCircle2 size={12} />
+          <div className={cn("flex items-center justify-center w-6 h-6 rounded-md transition-colors",
+            answerLoading || answerStreaming ? "bg-green/15 text-green" :
+            streamingAnswer ? "bg-green/10 text-green" : "bg-dim/10 text-dim/40")}>
+            {answerLoading ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
           </div>
           <span className={cn("text-[11px] font-bold uppercase tracking-[0.15em]", (answerLoading || streamingAnswer) ? "text-green/90" : "text-dim/40")}>流式参考打样</span>
+          {(answerLoading || answerStreaming) && (
+            <span className="ml-auto flex items-center gap-1.5 text-[9px] font-bold tracking-[0.2em] text-green/80 bg-green/10 border border-green/25 rounded-md px-1.5 py-0.5 uppercase">
+              <span className="inline-block w-1 h-1 rounded-full bg-green animate-pulse" />
+              {answerLoading ? "Waiting" : "Streaming"}
+            </span>
+          )}
         </div>
         <div className="pl-[34px]">
           {answerLoading && !streamingAnswer ? (
-            <PanelEmptyState active={true} />
+            <div className="space-y-2">
+              <div className="h-2.5 w-full rounded-full bg-green/15 copilot-shimmer-bg" />
+              <div className="h-2.5 w-[92%] rounded-full bg-green/12 copilot-shimmer-bg" style={{ animationDelay: '0.15s' }} />
+              <div className="h-2.5 w-[88%] rounded-full bg-green/10 copilot-shimmer-bg" style={{ animationDelay: '0.3s' }} />
+              <div className="h-2.5 w-[62%] rounded-full bg-green/8 copilot-shimmer-bg" style={{ animationDelay: '0.45s' }} />
+              <p className="text-[11px] text-green/65 font-medium pt-1 flex items-center gap-1.5">
+                <Loader2 size={10} className="animate-spin" />
+                Answer Coach 首 token 生成中...
+              </p>
+            </div>
           ) : streamingAnswer ? (
-            <p className="text-[13px] leading-7 text-text/90 whitespace-pre-wrap font-medium">{streamingAnswer}</p>
+            <p className="text-[13px] leading-7 text-text/90 whitespace-pre-wrap font-medium">
+              {streamingAnswer}
+              {answerStreaming && <span className="copilot-blink inline-block w-[2px] h-[1em] bg-green/80 translate-y-[2px] ml-[1px]" />}
+            </p>
           ) : (
             <PanelEmptyState active={false} />
           )}
