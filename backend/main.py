@@ -188,9 +188,9 @@ async def transcribe(file: UploadFile = File(...), user_id: str = Depends(get_cu
         raise HTTPException(400, "Empty audio file.")
 
     try:
-        from backend.transcribe import transcribe_audio
+        from backend.transcribe import transcribe_short
         suffix = "." + (file.filename or "audio.webm").rsplit(".", 1)[-1]
-        text = transcribe_audio(audio_bytes, suffix=suffix)
+        text = transcribe_short(audio_bytes, suffix=suffix)
         return {"text": text}
     except Exception as e:
         raise HTTPException(500, f"Transcription failed: {e}")
@@ -212,8 +212,8 @@ async def recording_transcribe(
     suffix = "." + (file.filename or "audio.webm").rsplit(".", 1)[-1]
 
     try:
-        from backend.transcribe import transcribe_audio
-        text = transcribe_audio(audio_bytes, suffix=suffix)
+        from backend.transcribe import transcribe_long
+        text = transcribe_long(audio_bytes, suffix=suffix)
         return {"transcript": text, "segments": []}
     except Exception as e:
         raise HTTPException(500, f"Transcription failed: {e}")
@@ -1800,7 +1800,7 @@ async def _init_copilot_session(
 
     # 尝试启动 ASR（可选，失败不阻塞）
     asr = None
-    if settings.dashscope_api_key:
+    if settings.effective_dashscope_api_key:
         try:
             from backend.copilot.asr_stream import CopilotASR
             loop = asyncio.get_event_loop()

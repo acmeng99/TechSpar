@@ -91,7 +91,8 @@ class CopilotASR:
     # ────────── 生命周期 ──────────
 
     async def start(self) -> bool:
-        if not settings.dashscope_api_key:
+        api_key = settings.effective_dashscope_api_key
+        if not api_key:
             raise RuntimeError(
                 "DASHSCOPE_API_KEY required for real-time ASR. Configure in .env"
             )
@@ -100,7 +101,7 @@ class CopilotASR:
             self._ws = await websockets.connect(
                 f"{_DASHSCOPE_WS_URL}?model={_ASR_MODEL}",
                 additional_headers={
-                    "Authorization": f"Bearer {settings.dashscope_api_key}",
+                    "Authorization": f"Bearer {api_key}",
                     "OpenAI-Beta": "realtime=v1",
                     "X-DashScope-DataInspection": "enable",
                 },

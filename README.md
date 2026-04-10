@@ -224,7 +224,7 @@ DASHSCOPE_API_KEY=
 TAVILY_API_KEY=
 ```
 
-不填 `COPILOT_*` 时会回退到主 LLM；`DASHSCOPE_API_KEY` 同时承担 Copilot 的**实时语音识别**（qwen3-asr-flash-realtime）和**录音文件批量转写**两个用途，不配置时 Copilot 只能手动输入 HR 的问题。
+不填 `COPILOT_*` 时会回退到主 LLM；`DASHSCOPE_API_KEY` 同时承担三类场景 —— **Copilot 实时语音识别**（qwen3-asr-flash-realtime）、**答题时短句语音输入**（同步 base64 直传）和**录音复盘长音频转写**（异步 filetrans），不配置时 Copilot 只能手动输入 HR 的问题。留空时若 `COPILOT_API_KEY` 已指向 DashScope，会自动复用那个 key，一套账号配一次即可。
 
 `DASHSCOPE_API_KEY` 来自阿里云百炼（DashScope），可以在阿里云百炼控制台注册后获取：<https://bailian.console.aliyun.com/>。新用户通常有免费额度，足够先把实时语音识别和录音转写跑通。
 
@@ -240,13 +240,13 @@ TENCENT_VPR_APP_ID=
 
 `TENCENT_SECRET_ID` 和 `TENCENT_SECRET_KEY` 可以在腾讯云访问管理控制台创建：<https://console.cloud.tencent.com/cam/capi>；`TENCENT_VPR_APP_ID` 需要先在智聆口语评测/声纹识别控制台开通 VPR 服务后获取：<https://console.cloud.tencent.com/vpr>。不配置时 Copilot 依然可用，只是需要手动点按钮切换"HR / You"角色。
 
-如果你要启用录音上传转写，还需要继续补全这些可选项：
+如果你要启用**录音复盘的长音频上传转写**，还需要补全阿里云 OSS（短句语音输入走 base64 同步链路，不需要 OSS）：
 
 ```env
-QINIU_ACCESS_KEY=
-QINIU_SECRET_KEY=
-QINIU_BUCKET=
-QINIU_DOMAIN=
+ALIYUN_OSS_ACCESS_KEY_ID=
+ALIYUN_OSS_ACCESS_KEY_SECRET=
+ALIYUN_OSS_BUCKET=
+ALIYUN_OSS_ENDPOINT=oss-cn-shanghai.aliyuncs.com
 ```
 
 `.env.example` 已经补齐了完整示例，可直接按需删改。

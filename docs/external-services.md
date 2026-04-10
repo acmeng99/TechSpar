@@ -12,7 +12,7 @@
 | `DASHSCOPE_API_KEY` | **两件事**：①Copilot 实时语音识别（qwen3-asr-flash-realtime）②录音文件批量转写 | 只能手动输入 HR 问题；录音上传转写也不可用 |
 | `TENCENT_SECRET_ID` `TENCENT_SECRET_KEY` `TENCENT_VPR_APP_ID` | Copilot **自动区分 HR 与候选人音色**（腾讯云 VPR 声纹识别） | 实时面试时需要手动点按钮切换"HR / You"角色 |
 | `TAVILY_API_KEY` | Copilot 的公司联网搜索 | 公司情报会退化，其他分析仍可用 |
-| `QINIU_ACCESS_KEY` `QINIU_SECRET_KEY` `QINIU_BUCKET` `QINIU_DOMAIN` | 录音文件上传到公网 URL | 不能走上传录音转写链路 |
+| `ALIYUN_OSS_ACCESS_KEY_ID` `ALIYUN_OSS_ACCESS_KEY_SECRET` `ALIYUN_OSS_BUCKET` `ALIYUN_OSS_ENDPOINT` | **长音频**（录音复盘）上传到公网 URL；短句语音输入不需要 | 录音复盘上传超过同步接口上限的音频时会失败 |
 
 ---
 
@@ -26,14 +26,16 @@
 | Copilot 实时语音版 | `DASHSCOPE_API_KEY`（`COPILOT_*` 可选） | 进入 Copilot 实时阶段，点击开始录音后能看到实时字幕 |
 | Copilot 自动说话人区分 | `DASHSCOPE_API_KEY` + `TENCENT_*`，并在设置页录入候选人声纹 | 实时面试时手动按钮被替换为"Auto"徽标，对话历史自动打 HR / candidate |
 | Copilot 联网公司搜索 | `TAVILY_API_KEY` | Copilot Prep 结果里不再出现"未配置搜索 API" |
-| 录音上传自动转写 | `DASHSCOPE_API_KEY` + `QINIU_*` | 录音复盘上传短音频后能拿到转写文本 |
+| 答题语音输入（短句） | `DASHSCOPE_API_KEY` | 录音回放页能把语音转成文字写入答题框 |
+| 录音复盘自动转写（长音频） | `DASHSCOPE_API_KEY` + `ALIYUN_OSS_*` | 录音复盘上传整段面试录音后能拿到转写文本 |
 
 再说得更直接一点：
 
 * **只想先用 Copilot 文本版**：先不管 `DASHSCOPE_API_KEY`、`TENCENT_*`、`TAVILY_API_KEY`，文本输入照样能用。
 * **只想开 Copilot 语音**：核心是 `DASHSCOPE_API_KEY`，`COPILOT_*` 不是强制。
 * **想让 HR / 候选人自动区分**：在"只想开 Copilot 语音"基础上再加 `TENCENT_*`，并录入候选人声纹。
-* **只想开录音上传转写**：只看 `DASHSCOPE_API_KEY + QINIU_*`（和实时语音共用一个 key）。
+* **只想开短句语音输入**：只要 `DASHSCOPE_API_KEY`，不需要对象存储。
+* **要开录音复盘长音频转写**：`DASHSCOPE_API_KEY` + `ALIYUN_OSS_*`（短音频和实时语音共用同一个 DashScope key）。
 
 ---
 
@@ -81,15 +83,21 @@ TENCENT_VPR_APP_ID=
 TAVILY_API_KEY=tvly-your-api-key
 ```
 
-#### 5. 录音上传转写示例
+#### 5. 录音复盘长音频转写示例
+
+短句语音输入只要填 `DASHSCOPE_API_KEY` 就行，走同步 `chat/completions` 直接上传 base64，不需要 OSS。
+
+长音频（录音复盘上传整段面试录音）走异步 `qwen3-asr-flash-filetrans`，协议层只认公网 URL，所以必须配阿里云 OSS：
 
 ```env
 DASHSCOPE_API_KEY=sk-your-dashscope-key
-QINIU_ACCESS_KEY=your-qiniu-ak
-QINIU_SECRET_KEY=your-qiniu-sk
-QINIU_BUCKET=your-bucket-name
-QINIU_DOMAIN=https://cdn.example.com
+ALIYUN_OSS_ACCESS_KEY_ID=LTAI5txxxxxxxxxxxxxxxxxxx
+ALIYUN_OSS_ACCESS_KEY_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+ALIYUN_OSS_BUCKET=your-bucket-name
+ALIYUN_OSS_ENDPOINT=oss-cn-shanghai.aliyuncs.com
 ```
+
+桶可以保持私有 —— 代码里用 1 小时过期的签名 URL 让 DashScope 拉文件，不需要公开读权限。
 
 ---
 
@@ -259,7 +267,8 @@ TENCENT_VPR_APP_ID=
 这个 key 来自阿里云 **百炼 / DashScope**，在当前项目里**承担两个完全不同的用途，但只需要一个 key**：
 
 1. **Copilot 实时语音识别**（流式）— 通过 WebSocket 调用 `qwen3-asr-flash-realtime` 模型，OpenAI Realtime 兼容协议，服务端自带 VAD。
-2. **录音上传批量转写** — 通过 HTTP 调用 `qwen3-asr-flash-filetrans` 模型，配合七牛 OSS 先上传文件再传公网 URL。
+2. **答题短句语音输入** — 通过 HTTP 调用 `qwen3-asr-flash` 同步模型，base64 直传，零对象存储依赖。
+3. **录音复盘长音频转写** — 通过 HTTP 调用 `qwen3-asr-flash-filetrans` 异步模型，配合阿里云 OSS 先上传文件再传签名 URL。
 
 配哪个都是同一个环境变量，别重复申请。
 
@@ -283,63 +292,67 @@ TENCENT_VPR_APP_ID=
 3. 进入面试 Copilot 的实时阶段，点击开始录音
 4. 如果能持续看到实时字幕，就算通了
 
-**验证批量转写**：
+**验证短句语音输入**：
 
 1. 配好 `DASHSCOPE_API_KEY`
-2. 再配好下面那组 `QINIU_*`
-3. 去**录音复盘**上传一段很短的音频
-4. 看能否成功拿到转写文本
+2. 在答题时按住麦克风说一段几秒的话
+3. 如果能看到文字出现在答题框里，就算通了 —— 这条链路不需要 OSS
 
-因为当前代码的批量转写链路不是直接把本地文件发给 DashScope，而是先上传到七牛，再把公网 URL 交给 DashScope。所以两段链路都走通才算配完整。
+**验证长音频录音复盘转写**：
+
+1. 配好 `DASHSCOPE_API_KEY` 和下面那组 `ALIYUN_OSS_*`
+2. 去**录音复盘**上传一段面试录音
+3. 看能否成功拿到转写文本
+
+长音频链路的流程是：**先把音频传到阿里云 OSS 拿一条 1 小时过期的签名 URL，再把 URL 交给 DashScope 异步转写**。所以两段链路都走通才算配完整。
 
 ---
 
-### 5. `QINIU_ACCESS_KEY` / `QINIU_SECRET_KEY` / `QINIU_BUCKET` / `QINIU_DOMAIN`
+### 5. `ALIYUN_OSS_ACCESS_KEY_ID` / `ALIYUN_OSS_ACCESS_KEY_SECRET` / `ALIYUN_OSS_BUCKET` / `ALIYUN_OSS_ENDPOINT`
 
-这组值给 **录音文件上传** 用，来自七牛云。
+这组值给**录音复盘长音频上传**用，来自阿里云 OSS。
+
+> 短句语音输入（答题时按住麦克风说话）走的是 DashScope 同步 `chat/completions` + base64 直传链路，不依赖 OSS。只有录音复盘的长音频场景才会调到这一段。
 
 #### 怎么拿
 
-1. 注册并登录七牛云控制台
-2. 在密钥管理里拿到 `AccessKey` 和 `SecretKey`
-3. 在 Kodo 对象存储里创建一个存储空间，得到 `Bucket`
-4. 给这个空间准备一个可公网访问的域名，填到 `QINIU_DOMAIN`
+1. 登录阿里云控制台并开通 **对象存储 OSS**
+2. 在 **RAM 访问控制** 里创建一个子账号，给它授 `AliyunOSSFullAccess`（或更细粒度的 bucket 级读写）
+3. 给这个子账号生成 `AccessKey ID` 和 `AccessKey Secret`，分别填入 `ALIYUN_OSS_ACCESS_KEY_ID` / `ALIYUN_OSS_ACCESS_KEY_SECRET`
+4. 在 OSS 控制台新建一个 Bucket，名字填到 `ALIYUN_OSS_BUCKET`，所在区域的 endpoint 填到 `ALIYUN_OSS_ENDPOINT`
 
 控制台入口：
 
-* 七牛云控制台：<https://portal.qiniu.com/>
-* 七牛云开发者中心：<https://developer.qiniu.com/>
+* 阿里云 OSS 控制台：<https://oss.console.aliyun.com/>
+* 阿里云 RAM 访问控制：<https://ram.console.aliyun.com/>
 
-#### `QINIU_DOMAIN` 该填什么
+#### `ALIYUN_OSS_ENDPOINT` 该填什么
 
-这里不要只填裸域名，应该填**完整前缀**，例如：
+填 Bucket 所在区域的 **公网 endpoint**（不要带协议前缀），示例：
 
 ```env
-QINIU_DOMAIN=https://cdn.example.com
+# 华东 1（杭州）
+ALIYUN_OSS_ENDPOINT=oss-cn-hangzhou.aliyuncs.com
+# 华东 2（上海）
+ALIYUN_OSS_ENDPOINT=oss-cn-shanghai.aliyuncs.com
+# 华北 2（北京）
+ALIYUN_OSS_ENDPOINT=oss-cn-beijing.aliyuncs.com
 ```
 
-因为当前代码会直接拼成：
-
-```text
-{QINIU_DOMAIN}/{object_key}
-```
-
-如果你只写 `cdn.example.com`，最终 URL 就不是一个可靠的完整公网地址。
+代码会结合 endpoint + bucket 自动生成签名 URL，**不需要额外配置自定义域名或公开读权限**，桶保持默认私有即可。
 
 #### 怎么验证
 
-最简单的验证路径还是直接走产品：
-
-1. 配好 `QINIU_*`
-2. 去 **录音复盘** 上传一个小文件
-3. 如果上传阶段就失败，通常优先看 AK/SK、Bucket 名和域名
-4. 如果上传成功但转写失败，再回头看 `DASHSCOPE_API_KEY`
+1. 配好 `ALIYUN_OSS_*` 和 `DASHSCOPE_API_KEY`
+2. 去**录音复盘**上传一段短测试录音
+3. 如果在上传阶段就失败（`Alibaba OSS not configured` / `oss2` 抛异常），优先看 AK/SK、Bucket 名和 endpoint 区域是否对应
+4. 如果上传成功但转写失败，再回头看 `DASHSCOPE_API_KEY` 是否有效
 
 #### 常见坑
 
-* `Bucket` 名写错时，通常会卡在上传阶段。
-* `QINIU_DOMAIN` 没带协议头时，后面拼出来的 URL 容易有问题。
-* 用测试域名做开发可以，但正式环境最好换成你自己的正式访问域名。
+* **Endpoint 区域不对**：`oss-cn-shanghai.aliyuncs.com` 和 `oss-cn-beijing.aliyuncs.com` 写混会 404/403。要和 Bucket 实际所在区域一致。
+* **RAM 子账号没授权**：只创建了子账号没授 OSS 权限，会在 `put_object` 阶段 403。最粗糙的解法是临时授 `AliyunOSSFullAccess`。
+* **Endpoint 带了 `https://` 前缀**：代码里 `oss2.Bucket(...)` 会自己加协议头，**不要**填成 `https://oss-cn-shanghai.aliyuncs.com`。
 
 ---
 
@@ -349,7 +362,7 @@ QINIU_DOMAIN=https://cdn.example.com
 
 1. 先只跑主 LLM + Embedding，把系统启动起来。
 2. 再决定 Copilot 要不要单独模型，最后再填 `COPILOT_*`。
-3. 需要实时语音 / 录音上传转写时，补 `DASHSCOPE_API_KEY`（两个场景共用）。录音上传还需要一起补 `QINIU_*`。
+3. 需要实时语音 / 短句语音输入 / 录音复盘转写时，补 `DASHSCOPE_API_KEY`（三个场景共用一个 key）。只有录音复盘的**长音频**需要额外再补 `ALIYUN_OSS_*`。
 4. 想让实时面试自动区分 HR 与候选人，再补 `TENCENT_*` 并在设置页录入候选人声纹。
 5. 需要公司联网搜索时，再补 `TAVILY_API_KEY`。
 
@@ -367,8 +380,9 @@ QINIU_DOMAIN=https://cdn.example.com
 | 实时字幕出来了但 Copilot 没有 Auto 徽标 | `TENCENT_*` 没配，或候选人声纹没注册；进设置页检查声纹识别卡片状态 |
 | 声纹注册时提示"腾讯云凭据无效" | 检查 `TENCENT_SECRET_ID` / `TENCENT_SECRET_KEY` 是否填反、空格、是否已开通腾讯云 VPR 产品 |
 | `TAVILY_API_KEY not configured, skipping company search` | 没填 `TAVILY_API_KEY`；这不会让 Copilot 全挂，只会跳过公司搜索 |
-| `Qiniu upload failed` | 优先看 `QINIU_ACCESS_KEY`、`QINIU_SECRET_KEY`、`QINIU_BUCKET` |
-| 上传成功但一直拿不到转写文本 | 优先看 `DASHSCOPE_API_KEY` 和 `QINIU_DOMAIN` 是否真能公网访问 |
+| `Alibaba OSS not configured: missing ...` | `ALIYUN_OSS_*` 有字段没填；按提示补齐 |
+| `oss2.exceptions.AccessDenied` / `NoSuchBucket` | Bucket 名写错、endpoint 区域对不上、或 RAM 子账号没授 OSS 权限 |
+| 上传成功但一直拿不到转写文本 | 优先看 `DASHSCOPE_API_KEY` 是否有效，以及签名 URL 在服务器侧能否公网访问 |
 | Copilot Prep 能跑，但公司情报很空 | `TAVILY_API_KEY` 没配，或目标公司本身公开信息太少 |
 
 如果你排查完环境变量仍然不对，下一步别继续猜，直接看后端启动日志和对应功能路径的报错。
