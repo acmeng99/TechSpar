@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileText, ChevronRight, CalendarDays, UploadCloud, CheckCircle2, Clock, Play } from "lucide-react";
-import { getResumeStatus, uploadResume, startInterview, getHistory } from "../api/interview";
+import { FileText, ChevronRight, CalendarDays, UploadCloud, CheckCircle2, Clock, Play, Briefcase, Sparkles } from "lucide-react";
+import { getResumeStatus, uploadResume, startInterview, getHistory, getProfile, inferTargetRole } from "../api/interview";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTaskStatus } from "../contexts/TaskStatusContext";
 
@@ -53,16 +54,36 @@ export default function ResumeInterview() {
   const [pageLoading, setPageLoading] = useState(true);
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [targetRole, setTargetRole] = useState("");
+  const [targetRoleInferring, setTargetRoleInferring] = useState(false);
   const { creatingSessionMode, setCreatingSessionMode } = useTaskStatus();
   const loading = creatingSessionMode === "resume";
 
+  const autoInferRole = async () => {
+    setTargetRoleInferring(true);
+    try {
+      const { target_role } = await inferTargetRole();
+      if (target_role) setTargetRole(target_role);
+    } catch {
+      // Silent fallback — user can type manually.
+    } finally {
+      setTargetRoleInferring(false);
+    }
+  };
+
   useEffect(() => {
-    getResumeStatus()
-      .then((s) => {
-        if (s.has_resume) setResumeFile({ filename: s.filename, size: s.size });
-      })
-      .catch(() => {})
-      .finally(() => setPageLoading(false));
+    Promise.all([
+      getResumeStatus().catch(() => ({ has_resume: false })),
+      getProfile().catch(() => ({})),
+    ]).then(([s, p]) => {
+      if (s.has_resume) setResumeFile({ filename: s.filename, size: s.size });
+      const existing = (p?.target_role || "").trim();
+      if (existing) {
+        setTargetRole(existing);
+      } else if (s.has_resume) {
+        autoInferRole();
+      }
+    }).finally(() => setPageLoading(false));
 
     getHistory(3, 0, "resume")
       .then((data) => setHistory(data.items || []))
@@ -74,9 +95,13 @@ export default function ResumeInterview() {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
+    const hadResume = !!resumeFile;
     try {
       const data = await uploadResume(file);
       setResumeFile({ filename: data.filename, size: data.size });
+      if (!hadResume && !targetRole.trim()) {
+        await autoInferRole();
+      }
     } catch (err) {
       alert("上传失败: " + err.message);
     } finally {
@@ -87,9 +112,11 @@ export default function ResumeInterview() {
 
   const handleStart = async () => {
     if (!resumeFile) return;
+    const role = targetRole.trim();
+    if (!role) return;
     setCreatingSessionMode("resume");
     try {
-      const data = await startInterview("resume");
+      const data = await startInterview("resume", null, { targetRole: role });
       navigate(`/interview/${data.session_id}`, { state: data });
     } catch (err) {
       alert("启动失败: " + err.message);
@@ -176,7 +203,34 @@ export default function ResumeInterview() {
             )}
           </div>
 
-          <div className="mt-8 pt-7 border-t border-border/70 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="mt-6 pt-5 border-t border-border/50">
+            <div className="flex items-center gap-2 mb-2.5">
+              <Briefcase size={14} className="text-dim" />
+              <label className="text-[13px] font-semibold text-text">本次面试目标岗位</label>
+            </div>
+            <div className="flex gap-2">
+              <Input
+                value={targetRole}
+                onChange={(e) => setTargetRole(e.target.value)}
+                placeholder={targetRoleInferring ? "正在根据简历推断..." : "如：AI 应用开发工程师 / 后端开发实习生"}
+                disabled={targetRoleInferring}
+                className="h-10 flex-1"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-10 px-3 shrink-0"
+                disabled={!resumeFile || targetRoleInferring}
+                onClick={autoInferRole}
+                title="根据简历重新推断"
+              >
+                <Sparkles size={14} className={cn(targetRoleInferring && "animate-spin")} />
+              </Button>
+            </div>
+            <div className="text-[12px] text-dim mt-1.5">面试官会按该岗位方向调整考察重点与追问深度</div>
+          </div>
+
+          <div className="mt-6 pt-5 border-t border-border/70 flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="text-[13px] text-dim w-full md:w-auto text-center md:text-left">
               准备开始迎接挑战？点击右侧正式进入模拟环境
             </div>
@@ -191,7 +245,7 @@ export default function ResumeInterview() {
                 variant="gradient"
                 size="lg"
                 className="w-full md:w-auto h-14 px-10 text-[16px] font-bold tracking-wide rounded-xl shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/30 disabled:opacity-40 disabled:hover:translate-y-0 disabled:shadow-none shrink-0"
-                disabled={!resumeFile}
+                disabled={!resumeFile || !targetRole.trim() || targetRoleInferring}
                 onClick={handleStart}
               >
                 <Play size={18} className="mr-2 fill-current" /> 立即开始模拟

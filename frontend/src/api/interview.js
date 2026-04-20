@@ -73,14 +73,23 @@ export async function uploadResume(file) {
   return res.json();
 }
 
-export async function startInterview(mode, topic = null, { numQuestions, divergence } = {}) {
+export async function startInterview(mode, topic = null, { numQuestions, divergence, targetRole } = {}) {
   const body = { mode, topic };
   if (numQuestions != null) body.num_questions = numQuestions;
   if (divergence != null) body.divergence = divergence;
+  if (targetRole != null) body.target_role = targetRole;
   const res = await authFetch(`${API_BASE}/interview/start`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function inferTargetRole() {
+  const res = await authFetch(`${API_BASE}/profile/infer-target-role`, {
+    method: "POST",
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();

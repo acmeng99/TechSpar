@@ -18,7 +18,7 @@ from backend.graphs.job_prep import (
 from backend.graphs.review import generate_review
 from backend.graphs.topic_drill import evaluate_drill_answers, generate_drill_questions
 from backend.indexer import load_topics
-from backend.memory import llm_update_profile, update_profile_after_interview
+from backend.memory import get_profile, llm_update_profile, update_profile_after_interview, update_target_role
 from backend.models import (
     ChatRequest,
     EndDrillRequest,
@@ -175,9 +175,17 @@ async def start_interview(req: StartInterviewRequest, user_id: str = Depends(get
     if req.mode == InterviewMode.RESUME:
         from backend.graphs.resume_interview import compile_resume_interview
 
+        target_role = (req.target_role or "").strip()
+        if not target_role:
+            target_role = (get_profile(user_id).get("target_role") or "").strip()
+        if not target_role:
+            raise HTTPException(400, "请先填写目标岗位")
+
+        await update_target_role(user_id, target_role)
+
         graph = compile_resume_interview(user_id)
         config = {"configurable": {"thread_id": session_id}}
-        result = await graph.ainvoke({}, config)
+        result = await graph.ainvoke({"target_role": target_role}, config)
 
         ai_message = ""
         for msg in reversed(result["messages"]):
@@ -185,7 +193,10 @@ async def start_interview(req: StartInterviewRequest, user_id: str = Depends(get
                 ai_message = msg.content
                 break
 
-        create_session(session_id, req.mode.value, req.topic, user_id=user_id)
+        create_session(
+            session_id, req.mode.value, req.topic,
+            meta={"target_role": target_role}, user_id=user_id,
+        )
         append_message(session_id, "assistant", ai_message, user_id=user_id)
         _graphs[session_id] = {
             "graph": graph,
@@ -198,6 +209,7 @@ async def start_interview(req: StartInterviewRequest, user_id: str = Depends(get
             "session_id": session_id,
             "mode": req.mode.value,
             "topic": req.topic,
+            "target_role": target_role,
             "message": ai_message,
         }
 
