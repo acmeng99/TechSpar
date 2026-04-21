@@ -181,19 +181,19 @@ function SoloRecordingReview({ topicsCovered, overall }) {
   );
 }
 
-function DrillReview({ scores, overall, questions, answers, topic }) {
+function DrillReview({ scores, overall, questions, answers, topic, sessionId, initialRefAnswers }) {
   const answerMap = {};
   for (const a of (answers || [])) answerMap[a.question_id] = a.answer;
   const scoreMap = {};
   for (const s of (scores || [])) scoreMap[s.question_id] = s;
-  const [refAnswers, setRefAnswers] = useState({});
+  const [refAnswers, setRefAnswers] = useState(initialRefAnswers || {});
   const [refLoading, setRefLoading] = useState({});
 
-  const handleRefAnswer = async (qId, questionText) => {
+  const handleRefAnswer = async (qId) => {
     if (refAnswers[qId]) return;
     setRefLoading((p) => ({ ...p, [qId]: true }));
     try {
-      const data = await getReferenceAnswer(topic, questionText);
+      const data = await getReferenceAnswer(sessionId, qId);
       setRefAnswers((p) => ({ ...p, [qId]: data.reference_answer }));
     } catch (e) {
       setRefAnswers((p) => ({ ...p, [qId]: "生成失败: " + e.message }));
@@ -302,7 +302,7 @@ function DrillReview({ scores, overall, questions, answers, topic }) {
                         variant="ghost"
                         size="sm"
                         className="text-primary"
-                        onClick={() => handleRefAnswer(q.id, q.question)}
+                        onClick={() => handleRefAnswer(q.id)}
                         disabled={refLoading[q.id]}
                       >
                         <BookOpen size={13} />
@@ -514,6 +514,7 @@ export default function Review() {
   const [topic, setTopic] = useState(stateData.topic || null);
   const [topicsCovered, setTopicsCovered] = useState(stateData.topics_covered || []);
   const [meta, setMeta] = useState(stateData.meta || {});
+  const [referenceAnswers, setReferenceAnswers] = useState(stateData.reference_answers || {});
   const [showTranscript, setShowTranscript] = useState(false);
   const [loading, setLoading] = useState(!review && !scores);
   const [restarting, setRestarting] = useState(false);
@@ -564,6 +565,7 @@ export default function Review() {
           const tc = data.topics_covered || data.overall?.topics_covered;
           if (tc) setTopicsCovered(tc);
           if (data.meta) setMeta(data.meta);
+          if (data.reference_answers) setReferenceAnswers(data.reference_answers);
           if (data.mode === "topic_drill" || data.mode === "jd_prep") {
             setAnswers(inferAnswers(data.questions || [], data.transcript || []));
           }
@@ -613,7 +615,7 @@ export default function Review() {
         ) : isJobPrep ? (
           <JobPrepReview scores={scores} overall={overall} questions={questions} answers={answers} meta={meta} />
         ) : showDrill ? (
-          <DrillReview scores={scores} overall={overall} questions={questions} answers={answers} topic={topic} />
+          <DrillReview scores={scores} overall={overall} questions={questions} answers={answers} topic={topic} sessionId={sessionId} initialRefAnswers={referenceAnswers} />
         ) : (
           <>
             <DimensionScores

@@ -39,7 +39,9 @@ from backend.runtime import (
 from backend.storage.sessions import (
     append_message,
     create_session,
+    get_session,
     save_drill_answers,
+    save_reference_answer,
     save_review,
 )
 from backend.storage.user_settings import load_user_settings
@@ -583,11 +585,31 @@ async def _update_job_prep_profile(overall: dict, scores: list, total_questions:
 
 @router.post("/interview/reference-answer")
 async def generate_reference_answer(body: dict, user_id: str = Depends(get_current_user)):
-    """Generate a reference answer for a specific question using LLM + knowledge base."""
-    topic = body.get("topic", "").strip()
-    question = body.get("question", "").strip()
-    if not topic or not question:
-        raise HTTPException(400, "topic and question are required")
+    """Get a reference answer for a question in a session. Cached per (session_id, question_id)."""
+    session_id = (body.get("session_id") or "").strip()
+    question_id = body.get("question_id")
+    if not session_id or question_id is None:
+        raise HTTPException(400, "session_id and question_id are required")
+
+    session = get_session(session_id, user_id=user_id)
+    if not session:
+        raise HTTPException(404, "Session not found.")
+
+    qid = str(question_id)
+    cached = (session.get("reference_answers") or {}).get(qid)
+    if cached:
+        return {"reference_answer": cached, "cached": True}
+
+    question = next(
+        (q for q in session.get("questions", []) if str(q.get("id")) == qid),
+        None,
+    )
+    if not question:
+        raise HTTPException(404, "Question not found in session.")
+    topic = session.get("topic") or ""
+    question_text = question.get("question", "").strip()
+    if not topic or not question_text:
+        raise HTTPException(400, "Session missing topic or question text.")
 
     from backend.indexer import retrieve_topic_context
     from backend.llm_provider import get_langchain_llm
@@ -595,15 +617,17 @@ async def generate_reference_answer(body: dict, user_id: str = Depends(get_curre
 
     topics = load_topics(user_id)
     topic_name = topics.get(topic, {}).get("name", topic)
-    refs = retrieve_topic_context(topic, question, user_id, top_k=3)
+    refs = retrieve_topic_context(topic, question_text, user_id, top_k=3)
     knowledge_context = "\n\n".join(refs) if refs else "（暂无参考材料）"
 
     prompt = REFERENCE_ANSWER_PROMPT.format(
         topic_name=topic_name,
-        question=question,
+        question=question_text,
         knowledge_context=knowledge_context,
     )
 
     llm = get_langchain_llm()
     response = llm.invoke([HumanMessage(content=prompt)])
-    return {"reference_answer": response.content.strip()}
+    answer = response.content.strip()
+    save_reference_answer(session_id, qid, answer, user_id=user_id)
+    return {"reference_answer": answer, "cached": False}

@@ -24,6 +24,7 @@ def _get_conn() -> sqlite3.Connection:
             scores TEXT DEFAULT '[]',
             weak_points TEXT DEFAULT '[]',
             overall TEXT DEFAULT '{}',
+            reference_answers TEXT DEFAULT '{}',
             review TEXT,
             user_id TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -31,7 +32,13 @@ def _get_conn() -> sqlite3.Connection:
         )
     """)
     # Migrate: add columns if missing (existing DBs)
-    for col, default in [("questions", "'[]'"), ("overall", "'{}'"), ("user_id", "NULL"), ("meta", "'{}'")]:
+    for col, default in [
+        ("questions", "'[]'"),
+        ("overall", "'{}'"),
+        ("user_id", "NULL"),
+        ("meta", "'{}'"),
+        ("reference_answers", "'{}'"),
+    ]:
         try:
             conn.execute(f"SELECT {col} FROM sessions LIMIT 1")
         except sqlite3.OperationalError:
@@ -136,7 +143,30 @@ def get_session(session_id: str, *, user_id: str) -> dict | None:
     result["scores"] = json.loads(result["scores"])
     result["weak_points"] = json.loads(result["weak_points"])
     result["overall"] = json.loads(result.get("overall", "{}") or "{}")
+    result["reference_answers"] = json.loads(result.get("reference_answers", "{}") or "{}")
     return result
+
+
+def save_reference_answer(session_id: str, question_id, answer: str, *, user_id: str) -> bool:
+    """Persist a generated reference answer keyed by question_id. Returns False if session not found."""
+    conn = _get_conn()
+    row = conn.execute(
+        "SELECT reference_answers FROM sessions WHERE session_id = ? AND user_id = ?",
+        (session_id, user_id),
+    ).fetchone()
+    if not row:
+        conn.close()
+        return False
+    refs = json.loads(row["reference_answers"] or "{}")
+    refs[str(question_id)] = answer
+    conn.execute(
+        "UPDATE sessions SET reference_answers = ?, updated_at = CURRENT_TIMESTAMP "
+        "WHERE session_id = ? AND user_id = ?",
+        (json.dumps(refs, ensure_ascii=False), session_id, user_id),
+    )
+    conn.commit()
+    conn.close()
+    return True
 
 
 def list_sessions_by_topic(topic: str, *, user_id: str, limit: int = 50) -> list[dict]:
