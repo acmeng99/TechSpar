@@ -14,6 +14,7 @@ import shutil
 import sqlite3
 import tarfile
 import tempfile
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -75,13 +76,18 @@ def _filter_tar_member(tarinfo: tarfile.TarInfo) -> tarfile.TarInfo | None:
 
 
 def _export_filtered_db(user_id: str, dst: Path) -> None:
-    """生成只含指定 user_id 行的 DB 副本。"""
+    """生成只含指定 user_id 行的 DB 副本。
+
+    用 closing() 显式关闭：sqlite3 的 with 语法只 commit/rollback、不 close，
+    Windows 上未关闭的连接持有文件锁，会让后续 tmp_db.unlink() 失败。
+    """
     src_path = _db_path()
-    with sqlite3.connect(str(src_path)) as src, sqlite3.connect(str(dst)) as dst_conn:
+    with closing(sqlite3.connect(str(src_path))) as src, \
+         closing(sqlite3.connect(str(dst))) as dst_conn:
         src.backup(dst_conn)
         dst_conn.execute("DELETE FROM sessions WHERE user_id != ?", (user_id,))
         dst_conn.commit()
-    with sqlite3.connect(str(dst)) as dst_conn:
+    with closing(sqlite3.connect(str(dst))) as dst_conn:
         dst_conn.execute("VACUUM")
 
 
