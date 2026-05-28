@@ -120,8 +120,9 @@ export default function Settings() {
   const [embLocalPath, setEmbLocalPath] = useState("");
   const [showEmbKey, setShowEmbKey] = useState(false);
 
-  // 账户/系统配置（全局）
+  // 账户/系统配置（全局，仅 admin 可见）
   const [allowRegistration, setAllowRegistration] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -190,6 +191,7 @@ export default function Settings() {
         setEmbLocalModel(emb.local_model || "");
         setEmbLocalPath(emb.local_path || "");
         setAllowRegistration(Boolean(data.system?.allow_registration));
+        setIsAdmin(Boolean(data.is_admin));
         setNumQuestions(data.training.num_questions ?? 10);
         setDivergence(data.training.divergence ?? 3);
       })
@@ -457,7 +459,7 @@ export default function Settings() {
     { id: "embedding", label: "Embedding", icon: Boxes },
     { id: "voiceprint", label: "声纹识别", icon: Mic },
     { id: "training", label: "训练参数", icon: Sliders },
-    { id: "account", label: "账户", icon: UserCog },
+    ...(isAdmin ? [{ id: "account", label: "账户", icon: UserCog }] : []),
     { id: "migration", label: "数据迁移", icon: Database },
   ];
 
@@ -856,14 +858,15 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        {/* Account / System */}
+        {/* Account / System (admin only) */}
+        {isAdmin && (
         <Card ref={accountRef} data-tab-id="account" className="overflow-hidden border-border/40 bg-card/40 scroll-mt-4">
           <CardContent className="p-5 md:p-7">
             <div className="flex items-center gap-2 mb-1">
               <UserCog size={16} className="text-primary" />
               <span className="text-base font-semibold">账户</span>
             </div>
-            <div className="text-[13px] text-dim mb-5">控制谁能进入系统。保存后立即生效。</div>
+            <div className="text-[13px] text-dim mb-5">控制谁能进入系统。保存后立即生效。仅管理员可见。</div>
 
             <label className="flex items-start justify-between gap-4 rounded-xl border border-border/60 bg-background/40 px-4 py-4 cursor-pointer select-none">
               <div className="min-w-0">
@@ -892,6 +895,7 @@ export default function Settings() {
             </label>
           </CardContent>
         </Card>
+        )}
 
         {/* Data Migration */}
         <Card ref={migrationRef} data-tab-id="migration" className="overflow-hidden border-border/40 bg-card/40 scroll-mt-4">
@@ -1027,7 +1031,9 @@ export default function Settings() {
             <span className="text-sm text-red">{error}</span>
           ) : (
             <span className="text-[12px] text-dim/70">
-              保存 LLM + Embedding + 训练参数 + 账户。声纹与数据迁移各自独立保存。
+              {isAdmin
+                ? "保存 LLM + Embedding + 训练参数 + 账户。声纹与数据迁移各自独立保存。"
+                : "保存 LLM + Embedding + 训练参数。声纹与数据迁移各自独立保存。"}
             </span>
           )}
           <Button variant="gradient" className="px-8" onClick={handleSave} disabled={saving}>

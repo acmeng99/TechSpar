@@ -190,6 +190,7 @@ class SettingsResponse(BaseModel):
     embedding: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
     system: SystemSettings = Field(default_factory=SystemSettings)
     training: UserSettings
+    is_admin: bool = False  # GET-only; ignored on PUT
 
 
 class VoiceprintCredentials(BaseModel):
