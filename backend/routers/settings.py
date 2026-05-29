@@ -1,32 +1,32 @@
-"""Settings routes."""
+"""Settings routes — per-user LLM/Embedding overrides + global system flags."""
+
+import logging
 
 from fastapi import APIRouter, Depends
 
 from backend.auth import get_current_user, is_admin_user
 from backend.config import settings
+from backend.llm_provider import embedding_signature, reset_embedding_cache
 from backend.models import EmbeddingSettings, LLMSettings, SettingsResponse, SystemSettings
-from backend.storage.user_settings import load_user_settings, save_user_settings
+from backend.storage.user_settings import (
+    load_user_provider,
+    load_user_settings,
+    save_user_provider,
+    save_user_settings,
+)
+
+logger = logging.getLogger("uvicorn")
 
 router = APIRouter(prefix="/api")
 
 
 @router.get("/settings")
 def get_user_settings(user_id: str = Depends(get_current_user)):
-    """Get combined LLM (global) and training (per-user) settings."""
-    llm = LLMSettings(
-        api_base=settings.api_base,
-        api_key=settings.api_key,
-        model=settings.model,
-        temperature=settings.temperature,
-    )
-    embedding = EmbeddingSettings(
-        backend=settings.embedding_backend,
-        api_base=settings.embedding_api_base,
-        api_key=settings.embedding_api_key,
-        api_model=settings.embedding_api_model,
-        local_model=settings.local_embedding_model,
-        local_path=settings.local_embedding_path,
-    )
+    """Return this user's own LLM/Embedding overrides (empty fields inherit the
+    global .env default), plus global system flags and per-user training prefs."""
+    llm_override, emb_override = load_user_provider(user_id)
+    llm = llm_override or LLMSettings(temperature=settings.temperature)
+    embedding = emb_override or EmbeddingSettings()
     system = SystemSettings(allow_registration=settings.allow_registration)
     training = load_user_settings(user_id)
     return SettingsResponse(
@@ -40,29 +40,63 @@ def get_user_settings(user_id: str = Depends(get_current_user)):
 
 @router.put("/settings")
 def put_user_settings(payload: SettingsResponse, user_id: str = Depends(get_current_user)):
-    """Update LLM/Embedding (global, hot-reload) and training (per-user) settings."""
-    from backend.llm_provider import _reset_embedding_singleton, _reset_llama_singleton
+    """Persist this user's LLM/Embedding overrides and training prefs.
 
-    llm = payload.llm
-    settings.api_base = llm.api_base
-    settings.api_key = llm.api_key
-    settings.model = llm.model
-    settings.temperature = llm.temperature
-    _reset_llama_singleton()
+    On embedding-model change, the user's now-incompatible vectors are invalidated
+    (fast — prevents dimension-mismatch). Re-embedding is the explicit follow-up:
+    POST /settings/rebuild-index. Returns embedding_changed so the UI can warn."""
+    old_emb_sig = embedding_signature(user_id)
 
-    emb = payload.embedding
-    settings.embedding_backend = emb.backend
-    settings.embedding_api_base = emb.api_base
-    settings.embedding_api_key = emb.api_key
-    settings.embedding_api_model = emb.api_model
-    settings.local_embedding_model = emb.local_model
-    settings.local_embedding_path = emb.local_path
-    _reset_embedding_singleton()
+    save_user_provider(user_id, payload.llm, payload.embedding)
+    # Drop the cached client so the next call picks up the new key/base/model.
+    reset_embedding_cache(user_id)
 
-    # 仅 admin 能改全局账户开关；非 admin 的请求即便带了 system 字段也直接忽略，
-    # 避免前端老缓存把当前值回写后非 admin 触发 403。
+    embedding_changed = embedding_signature(user_id) != old_emb_sig
+    if embedding_changed:
+        from backend.indexer import invalidate_user_embeddings
+
+        logger.info("Embedding model changed for user %s — vectors invalidated.", user_id)
+        invalidate_user_embeddings(user_id)
+
+    # 仅 admin 能改全局账户开关；非 admin 的请求即便带了 system 字段也直接忽略。
     if is_admin_user(user_id):
         settings.allow_registration = payload.system.allow_registration
 
     save_user_settings(payload.training, user_id)
-    return {"ok": True}
+    return {"ok": True, "embedding_changed": embedding_changed}
+
+
+@router.post("/settings/rebuild-index")
+def rebuild_index(user_id: str = Depends(get_current_user)):
+    """Re-embed the user's resume / knowledge bases / weak-point memory with their
+    current embedding model. Idempotent: clears stale vectors first. Best-effort per
+    source — a missing/empty corpus is skipped, not an error."""
+    from backend.indexer import (
+        build_resume_index,
+        build_topic_index,
+        get_topic_map,
+        invalidate_user_embeddings,
+    )
+    from backend.vector_memory import rebuild_index_from_profile
+
+    invalidate_user_embeddings(user_id)
+    rebuild_index_from_profile(user_id)
+
+    result = {"weak_points": True, "resume": False, "topics": []}
+
+    resume_dir = settings.user_resume_path(user_id)
+    if resume_dir.exists() and any(p.is_file() for p in resume_dir.rglob("*")):
+        try:
+            build_resume_index(user_id, force_rebuild=True)
+            result["resume"] = True
+        except Exception as exc:  # noqa: BLE001 - best-effort, report and continue
+            logger.warning("Resume reindex failed for user %s: %s", user_id, exc)
+
+    for topic in get_topic_map(user_id):
+        try:
+            build_topic_index(topic, user_id, force_rebuild=True)
+            result["topics"].append(topic)
+        except Exception as exc:  # noqa: BLE001 - topics without docs are expected
+            logger.info("Topic '%s' reindex skipped for user %s: %s", topic, user_id, exc)
+
+    return {"ok": True, "rebuilt": result}
