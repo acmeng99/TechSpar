@@ -12,6 +12,7 @@ import {
   BriefcaseBusiness,
   Sparkles,
   FileText,
+  Check,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import useScrollReveal from "@/hooks/useScrollReveal";
@@ -19,6 +20,8 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import Logo from "../components/Logo";
+import heroLoop from "../assets/hero-loop.mp4";
+import heroPoster from "../assets/hero-poster.png";
 
 const LOOP_MODULES = [
   {
@@ -144,33 +147,6 @@ const LOOP_MODULES = [
   },
 ];
 
-const HERO_STATS = [
-  {
-    icon: Target,
-    stat: "95%",
-    title: "薄弱点精准定位",
-    desc: "长期记忆引擎追踪每次失误，精准锁定需要强化的环节。",
-    iconClass: "bg-primary/10 text-primary",
-    statClass: "text-primary",
-  },
-  {
-    icon: BarChart3,
-    stat: "3x",
-    title: "训练效率提升",
-    desc: "AI 动态调题取代随机出题，每一轮都比上一轮更有针对性。",
-    iconClass: "bg-teal/10 text-teal",
-    statClass: "text-teal",
-  },
-  {
-    icon: Sparkles,
-    stat: "40%",
-    title: "面试通过率提升",
-    desc: "闭环训练覆盖从刷题到实战全链路，不止练题更练实战。",
-    iconClass: "bg-green/10 text-green",
-    statClass: "text-green",
-  },
-];
-
 const HERO_SIGNALS = [
   {
     icon: Repeat,
@@ -218,86 +194,6 @@ const MEMORY_SIGNALS = [
 
 const revealStyle = (delay) => ({ "--reveal-delay": `${delay}s` });
 
-/* ── Mouse-tracking parallax for ambient orbs ── */
-function useMouseParallax(strength = 0.02) {
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-
-  useEffect(() => {
-    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-    if (reduced) return;
-
-    let raf;
-    const onMove = (e) => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        const cx = window.innerWidth / 2;
-        const cy = window.innerHeight / 2;
-        setOffset({
-          x: (e.clientX - cx) * strength,
-          y: (e.clientY - cy) * strength,
-        });
-      });
-    };
-    window.addEventListener("mousemove", onMove, { passive: true });
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      cancelAnimationFrame(raf);
-    };
-  }, [strength]);
-
-  return offset;
-}
-
-/* ── Animated stat counter ── */
-function AnimatedCounter({ value, className }) {
-  const ref = useRef(null);
-  const [display, setDisplay] = useState(value);
-  const hasAnimated = useRef(false);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof IntersectionObserver === "undefined") return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !hasAnimated.current) {
-          hasAnimated.current = true;
-          observer.unobserve(el);
-
-          const numeric = parseFloat(value);
-          const suffix = value.replace(/[\d.]/g, "");
-          const isDecimal = value.includes(".");
-          const duration = 1200;
-          const start = performance.now();
-
-          const tick = (now) => {
-            const elapsed = now - start;
-            const progress = Math.min(elapsed / duration, 1);
-            // Ease-out cubic
-            const eased = 1 - Math.pow(1 - progress, 3);
-            const current = numeric * eased;
-            setDisplay(
-              (isDecimal ? current.toFixed(1) : Math.round(current)) + suffix
-            );
-            if (progress < 1) requestAnimationFrame(tick);
-          };
-          requestAnimationFrame(tick);
-        }
-      },
-      { threshold: 0.3 }
-    );
-
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [value]);
-
-  return (
-    <span ref={ref} className={className}>
-      {display}
-    </span>
-  );
-}
-
 /* ── Typing effect for detail panel preview lines ── */
 function TypedLine({ text, delay = 0 }) {
   const [displayed, setDisplayed] = useState("");
@@ -341,7 +237,6 @@ export default function Landing() {
   const loopRef = useScrollReveal();
   const memoryRef = useScrollReveal();
   const ctaRef = useScrollReveal();
-  const parallax = useMouseParallax(0.018);
 
   const scrollToLoop = () => {
     document.getElementById("loop")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -351,7 +246,7 @@ export default function Landing() {
     <div className="landing-motion min-h-screen bg-bg text-text">
       <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(245,158,11,0.035)_1px,transparent_1px),linear-gradient(to_bottom,rgba(245,158,11,0.035)_1px,transparent_1px)] bg-[size:72px_72px] opacity-60 pointer-events-none" />
 
-      <header className="sticky top-0 z-40 border-b border-border/70 bg-bg/85 backdrop-blur-xl">
+      <header className="sticky top-0 z-40">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 md:px-10">
           <div className="flex items-center gap-2.5">
             <Logo className="h-8 w-8 rounded-lg drop-shadow-sm" />
@@ -373,112 +268,71 @@ export default function Landing() {
       </header>
 
       <main className="relative z-10">
-        <section className="overflow-hidden px-6 pb-16 pt-12 md:px-10 md:pb-24 md:pt-16">
-          <div
-            className="ambient-orb absolute left-[8%] top-24 h-56 w-56 rounded-full bg-primary/10 blur-3xl pointer-events-none animate-drift-slow"
-            style={{ transform: `translate3d(${parallax.x * 1.2}px, ${parallax.y * 1.2}px, 0)` }}
-          />
-          <div
-            className="ambient-orb absolute right-[10%] top-36 h-64 w-64 rounded-full bg-teal/10 blur-3xl pointer-events-none animate-drift-reverse"
-            style={{ transform: `translate3d(${parallax.x * -0.8}px, ${parallax.y * -0.8}px, 0)` }}
-          />
+        <section className="relative -mt-[72px] overflow-hidden border-b border-border/60">
+          <div className="absolute inset-0">
+            <video
+              className="h-full w-full object-cover object-center"
+              autoPlay
+              muted
+              loop
+              playsInline
+              poster={heroPoster}
+            >
+              <source src={heroLoop} type="video/mp4" />
+            </video>
+            <div className="absolute inset-0 bg-gradient-to-r from-bg via-bg/92 to-bg/30" />
+            <div className="absolute inset-0 bg-gradient-to-t from-bg via-transparent to-bg/35" />
+          </div>
 
-          <div className="mx-auto max-w-7xl">
-            <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(350px,430px)] lg:items-start lg:gap-8 xl:grid-cols-[minmax(0,1.02fr)_minmax(380px,450px)] xl:gap-10">
-              <div className="max-w-2xl lg:max-w-[760px] xl:max-w-[820px]">
-                <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary animate-fade-in">
-                  <Sparkles size={14} className="animate-float" />
-                  从刷题到实战的 AI 技术面试系统
-                </div>
+          <div className="relative mx-auto max-w-7xl px-6 py-28 md:px-10 md:py-36 lg:py-48">
+            <div className="max-w-xl lg:max-w-2xl">
+              <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary backdrop-blur-sm animate-fade-in">
+                <Sparkles size={14} className="animate-float" />
+                从刷题到实战的 AI 技术面试系统
+              </div>
 
-                <h1 className="mt-6 text-4xl font-display font-bold leading-tight tracking-tight md:text-6xl md:leading-[1.04] animate-fade-in-up">
-                  把技术面试做成
-                  <span className="hero-gradient-text mt-2 block bg-gradient-to-r from-accent-light via-accent to-orange bg-clip-text text-transparent">
-                    一条持续进化的闭环
+              <h1 className="mt-6 text-4xl font-display font-bold leading-tight tracking-tight md:text-6xl md:leading-[1.04] animate-fade-in-up">
+                把技术面试做成
+                <span className="hero-gradient-text mt-2 block bg-gradient-to-r from-accent-light via-accent to-orange bg-clip-text text-transparent">
+                  一条持续进化的闭环
+                </span>
+              </h1>
+
+              <p className="mt-6 max-w-xl text-base leading-8 text-dim md:text-lg animate-fade-in-up [animation-delay:0.08s]">
+                别的面试工具练完就忘，每次都从零开始。TechSpar 把训练、实战辅助和复盘接进同一套长期记忆——你的弱点、表达习惯和高危路径它都记得，
+                <span className="font-medium text-text">越练越懂你</span>。
+              </p>
+
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center animate-fade-in-up [animation-delay:0.16s]">
+                <Button variant="gradient" size="lg" onClick={() => navigate("/login")}>
+                  在线体验
+                  <ArrowRight size={16} />
+                </Button>
+                <button
+                  type="button"
+                  onClick={scrollToLoop}
+                  className="inline-flex items-center gap-1.5 px-1 text-sm font-medium text-dim transition-colors hover:text-text"
+                >
+                  看闭环怎么运转
+                  <ArrowRight size={14} />
+                </button>
+              </div>
+
+              <div className="mt-10 flex flex-wrap gap-x-6 gap-y-2.5 text-sm text-dim animate-fade-in-up [animation-delay:0.24s]">
+                {HERO_SIGNALS.map((item) => (
+                  <span key={item.title} className="flex items-center gap-1.5">
+                    <Check size={14} className="text-primary" />
+                    {item.title}
                   </span>
-                </h1>
-
-                <p className="mt-6 max-w-2xl text-base leading-8 text-dim md:text-lg animate-fade-in-up [animation-delay:0.08s]">
-                  TechSpar 不只是生成一轮题，也不只是做一次模拟面试。它把专项训练、简历面试、JD 备面、实时
-                  Copilot 和录音复盘接进同一套长期记忆里，让每一轮训练、实战辅助和复盘结果都会反哺下一轮。
-                </p>
-
-                <div className="mt-8 flex flex-col gap-3 sm:flex-row animate-fade-in-up [animation-delay:0.16s]">
-                  <Button variant="gradient" size="lg" onClick={() => navigate("/login")}>
-                    在线体验
-                    <ArrowRight size={16} />
-                  </Button>
-                  <Button variant="outline" size="lg" onClick={scrollToLoop}>
-                    看闭环怎么运转
-                  </Button>
-                </div>
-
-                <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:max-w-[820px] lg:grid-cols-3 xl:max-w-[880px]">
-                  {HERO_SIGNALS.map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <Card
-                        key={item.title}
-                        className="animate-fade-in-up border-border/80 bg-card/85 shadow-[0_20px_60px_rgba(15,23,42,0.06)] backdrop-blur-sm transition-transform duration-300 hover:-translate-y-0.5"
-                        style={{ animationDelay: `${0.18 + HERO_SIGNALS.indexOf(item) * 0.08}s` }}
-                      >
-                        <CardContent className="p-4">
-                          <div className="flex items-center gap-2.5">
-                            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                              <Icon size={17} />
-                            </div>
-                            <div className="text-[15px] font-semibold leading-6">{item.title}</div>
-                          </div>
-                          <p className="mt-3 text-sm leading-6 text-dim">{item.desc}</p>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="relative lg:-mt-1 lg:self-start lg:pt-0 xl:mt-0 xl:pt-2">
-                <div className="pointer-events-none absolute inset-x-10 top-0 hidden h-32 rounded-full bg-primary/10 blur-3xl lg:block" />
-                <div className="grid gap-4 lg:ml-auto lg:max-w-[440px] xl:max-w-[450px]">
-                  {HERO_STATS.map((item, index) => {
-                    const Icon = item.icon;
-                    return (
-                      <Card
-                        key={item.title}
-                        className={cn(
-                          "animate-fade-in-up rounded-[26px] border-border/80 bg-card/92 shadow-[0_24px_70px_rgba(15,23,42,0.07)] backdrop-blur-sm transition-transform duration-300 hover:-translate-y-0.5",
-                          index === 1 && "lg:translate-x-2 xl:translate-x-4",
-                          index === 2 && "lg:translate-x-4 xl:translate-x-8"
-                        )}
-                        style={{ animationDelay: `${0.22 + index * 0.08}s` }}
-                      >
-                        <CardContent className="p-5 md:p-6">
-                          <div className="flex items-start gap-4">
-                            <div className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl", item.iconClass)}>
-                              <Icon size={20} />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-                                <AnimatedCounter
-                                  value={item.stat}
-                                  className={cn("text-4xl font-display font-bold tracking-tight leading-none", item.statClass)}
-                                />
-                                <span className="text-lg font-semibold leading-tight">{item.title}</span>
-                              </div>
-                              <p className="mt-2 text-sm leading-7 text-dim">{item.desc}</p>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
+                ))}
               </div>
             </div>
+          </div>
+        </section>
 
-            <div className="mt-12 animate-fade-in-up [animation-delay:0.24s] lg:mt-14">
-              <LoopVisual />
-            </div>
+        <section className="px-6 pb-16 pt-16 md:px-10 md:pb-24 md:pt-24">
+          <div className="mx-auto max-w-7xl">
+            <LoopVisual />
           </div>
         </section>
 
