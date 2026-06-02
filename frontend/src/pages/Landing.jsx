@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import Logo from "../components/Logo";
+import GitHubStar from "../components/GitHubStar";
 import heroLoop from "../assets/hero-loop.mp4";
 import heroPoster from "../assets/hero-poster.png";
 
@@ -257,6 +258,7 @@ export default function Landing() {
           </div>
 
           <div className="flex items-center gap-3">
+            <GitHubStar />
             <Button variant="ghost" size="icon" onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}>
               {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
             </Button>
