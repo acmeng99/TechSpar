@@ -8,6 +8,7 @@
 import asyncio
 import json
 import logging
+import math
 import re
 from datetime import datetime
 from pathlib import Path
@@ -305,6 +306,25 @@ async def update_target_role(user_id: str, target_role: str) -> None:
         _save_profile(profile, user_id)
 
 
+# Weak-point salience decay: rank active weak points by recency × frequency so a
+# point not re-exposed in training gradually sinks instead of being hard-cut at a
+# fixed age cliff. Pure ranking signal — never persisted. HALF_LIFE ≈ idle days that
+# halve salience; repeated occurrences slow the sink (capped at +2×).
+WEAK_POINT_HALF_LIFE_DAYS = 30
+
+
+def _weak_point_weight(wp: dict, now: datetime) -> float:
+    last_seen = wp.get("last_seen") or wp.get("first_seen") or ""
+    try:
+        days = max(0.0, (now - datetime.fromisoformat(last_seen)).total_seconds() / 86400)
+    except (ValueError, TypeError):
+        days = 0.0  # missing/bad timestamp → treat as fresh, don't penalize
+    recency = 0.5 ** (days / WEAK_POINT_HALF_LIFE_DAYS)
+    times_seen = wp.get("times_seen", 1) or 1
+    freq_mult = 1.0 + min(math.log2(times_seen), 2.0)
+    return recency * freq_mult
+
+
 def get_topic_context_for_drill(topic: str, user_id: str) -> dict:
     """Get personalized context for drill question generation."""
     profile = _load_profile(user_id)
@@ -314,14 +334,18 @@ def get_topic_context_for_drill(topic: str, user_id: str) -> dict:
     mastery_notes = mastery.get("notes", "新领域，暂无历史数据" if mastery_score == 0 else "")
     mastery_info = f"{mastery_score}/100 — {mastery_notes}"
 
-    # Weak points for this topic (knowledge only — legacy axis=performance excluded)
-    topic_weak = [
-        w["point"] for w in profile.get("weak_points", [])
+    # Weak points for this topic (knowledge only — legacy axis=performance excluded),
+    # most salient first via recency×frequency decay.
+    now = datetime.now()
+    topic_weak_wps = [
+        w for w in profile.get("weak_points", [])
         if w.get("topic") == topic
         and not w.get("improved")
         and not w.get("archived")
         and w.get("axis") != "performance"
     ]
+    topic_weak_wps.sort(key=lambda w: _weak_point_weight(w, now), reverse=True)
+    topic_weak = [w["point"] for w in topic_weak_wps]
 
     # Recent questions from score_history for this topic
     recent_questions = [
@@ -452,7 +476,13 @@ def get_profile_summary(user_id: str) -> str:
     parts = []
     active_weak = _active_knowledge_weak_points(profile)
     if active_weak:
-        observed = [w["point"] for w in active_weak if w.get("source", "observed") == "observed"][:6]
+        now = datetime.now()
+        observed_wps = sorted(
+            (w for w in active_weak if w.get("source", "observed") == "observed"),
+            key=lambda w: _weak_point_weight(w, now),
+            reverse=True,
+        )
+        observed = [w["point"] for w in observed_wps[:6]]
         predicted = [w["point"] for w in active_weak if w.get("source") == "predicted"][:4]
         if observed:
             parts.append(f"已知知识薄弱点（训练中暴露）: {', '.join(observed)}")
@@ -855,11 +885,14 @@ def _update_thinking_patterns(profile: dict, patterns: dict, user_id: str):
 
 
 def _archive_stale_weak_points(profile: dict):
-    """Archive weak points not seen recently — keeps them in profile but out of active prompts.
+    """Long-horizon graveyard cleanup — caps unbounded growth of one-off weak points.
+
+    Day-to-day prioritization is handled by recency decay (_weak_point_weight), so this
+    only archives points that are both very old and never recurred. Archived points stay
+    in profile (file-as-truth) but drop out of active prompts/views.
 
     Rules:
-    - last_seen > 60 days → archive regardless
-    - last_seen > 30 days AND times_seen <= 2 → archive
+    - last_seen > 180 days AND times_seen <= 1 → archive
     - Already improved/archived → skip
     - source == "consolidated" → skip (refreshed by re-running consolidation, not by time)
     """
@@ -878,7 +911,7 @@ def _archive_stale_weak_points(profile: dict):
             continue
         days_since = (now - last_seen).days
         times_seen = wp.get("times_seen", 1)
-        if days_since > 60 or (days_since > 30 and times_seen <= 2):
+        if days_since > 180 and times_seen <= 1:
             wp["archived"] = True
             wp["archived_at"] = now.isoformat()
             wp.setdefault("history", []).append({
