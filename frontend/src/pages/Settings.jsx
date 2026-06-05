@@ -118,6 +118,7 @@ export default function Settings() {
   const [embApiBase, setEmbApiBase] = useState("");
   const [embApiKey, setEmbApiKey] = useState("");
   const [embApiModel, setEmbApiModel] = useState("");
+  const [embApiBatchSize, setEmbApiBatchSize] = useState(10);
   const [embLocalModel, setEmbLocalModel] = useState("");
   const [embLocalPath, setEmbLocalPath] = useState("");
   const [showEmbKey, setShowEmbKey] = useState(false);
@@ -209,6 +210,7 @@ export default function Settings() {
         setEmbApiBase(emb.api_base || "");
         setEmbApiKey(emb.api_key || "");
         setEmbApiModel(emb.api_model || "");
+        setEmbApiBatchSize(emb.api_batch_size ?? 10);
         setEmbLocalModel(emb.local_model || "");
         setEmbLocalPath(emb.local_path || "");
         const svc = data.services || {};
@@ -456,6 +458,7 @@ export default function Settings() {
           api_base: embApiBase,
           api_key: embApiKey,
           api_model: embApiModel,
+          api_batch_size: embApiBatchSize,
           local_model: embLocalModel,
           local_path: embLocalPath,
         },
@@ -712,6 +715,23 @@ export default function Settings() {
                     >
                       {showEmbKey ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className={labelClass}>单批文本数 (Batch Size)</Label>
+                  <Input
+                    className={cn(inputClass, "max-w-[160px]")}
+                    type="number"
+                    min={1}
+                    max={2048}
+                    value={embApiBatchSize}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value, 10);
+                      setEmbApiBatchSize(Number.isNaN(v) ? 1 : Math.min(2048, Math.max(1, v)));
+                    }}
+                  />
+                  <div className="text-[12px] text-dim/70">
+                    每次请求的文本条数上限。DashScope（如 text-embedding-v4）最多 10；OpenAI 可设更大（如 100）。超限会报 400。
                   </div>
                 </div>
               </div>

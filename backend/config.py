@@ -3,6 +3,9 @@ from pydantic_settings import BaseSettings
 
 
 DEFAULT_EMBEDDING_MODEL = "BAAI/bge-m3"
+# API embedding 单批文本数上限的默认值。DashScope 兼容接口最多 10 条,
+# OpenAIEmbedding 默认 100 会被打回 400,故默认取 10 以兼容。
+DEFAULT_API_EMBED_BATCH_SIZE = 10
 
 
 # ── Embedding inference (single source of truth) ──

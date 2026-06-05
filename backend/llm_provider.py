@@ -14,6 +14,7 @@ from langchain_openai import ChatOpenAI
 from llama_index.llms.openai_like import OpenAILike
 
 from backend.config import (
+    DEFAULT_API_EMBED_BATCH_SIZE,
     embedding_api_model_of,
     embedding_local_model_of,
     embedding_local_path_of,
@@ -70,6 +71,7 @@ def resolve_embedding_config(user_id: str | None = None) -> dict:
         return {
             "backend": "", "api_base": "", "api_key": "",
             "api_model": "", "local_model": "", "local_path": "",
+            "api_batch_size": DEFAULT_API_EMBED_BATCH_SIZE,
         }
     return {
         "backend": override.backend,
@@ -78,6 +80,7 @@ def resolve_embedding_config(user_id: str | None = None) -> dict:
         "api_model": override.api_model,
         "local_model": override.local_model,
         "local_path": override.local_path,
+        "api_batch_size": override.api_batch_size,
     }
 
 
@@ -96,7 +99,8 @@ def _embedding_cache_sig(c: dict) -> str:
     """Full-config cache key — any field change (incl. api_key/api_base) must
     rebuild the embedding client, even when the model identity is unchanged."""
     return "|".join(
-        (c["backend"], c["api_base"], c["api_key"], c["api_model"], c["local_model"], c["local_path"])
+        (c["backend"], c["api_base"], c["api_key"], c["api_model"],
+         c["local_model"], c["local_path"], str(c["api_batch_size"]))
     )
 
 
@@ -158,7 +162,9 @@ def _build_embedding(c: dict):
         model_name = embedding_api_model_of(c["api_model"], deprecated)
         if not model_name:
             raise RuntimeError("EMBEDDING_API_MODEL is required when EMBEDDING_BACKEND=api")
-        kwargs = {"model_name": model_name, "api_key": c["api_key"]}
+        # 单批文本数:OpenAIEmbedding 默认 100,但 DashScope 兼容接口最多 10 会被打回 400。
+        # 用 per-user 配置(默认 DEFAULT_API_EMBED_BATCH_SIZE)控制,兼容不同服务商上限。
+        kwargs = {"model_name": model_name, "api_key": c["api_key"], "embed_batch_size": c["api_batch_size"]}
         if c["api_base"]:
             kwargs["api_base"] = c["api_base"]
         return OpenAIEmbedding(**kwargs)

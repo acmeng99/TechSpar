@@ -6,6 +6,8 @@ from typing import Annotated, TypedDict
 from pydantic import BaseModel, Field
 from langgraph.graph import add_messages
 
+from backend.config import DEFAULT_API_EMBED_BATCH_SIZE
+
 
 # ── Enums ──
 
@@ -177,6 +179,8 @@ class EmbeddingSettings(BaseModel):
     api_model: str = ""
     local_model: str = ""
     local_path: str = ""
+    # API 单批文本数上限。DashScope 兼容接口最多 10;OpenAI 可设更大。仅 API 模式生效。
+    api_batch_size: int = Field(default=DEFAULT_API_EMBED_BATCH_SIZE, ge=1, le=2048)
 
 
 class ServiceSettings(BaseModel):
