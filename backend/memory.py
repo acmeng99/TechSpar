@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 
 import numpy as np
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from langchain_core.messages import SystemMessage, HumanMessage
 
 from backend.config import settings
 from backend.llm_provider import get_langchain_llm
