@@ -429,6 +429,9 @@ def _top_consolidated_patterns(profile: dict, limit: int = 3) -> list[str]:
 def _top_behavior_signals(profile: dict, polarity: str | None = None, limit: int = 6) -> list[tuple[str, dict]]:
     """Top behavior_signals sorted by recency × times_seen.
 
+    复用 _weak_point_weight 的半衰期权重（字段同构: last_seen/first_seen/times_seen）。
+    纯按 times_seen 排会让几个月前的旧高频信号永远压住最近的新信号。
+
     polarity=None returns all (active negatives + improved positives).
     polarity="negative" returns active negative signals only.
     """
@@ -441,11 +444,8 @@ def _top_behavior_signals(profile: dict, polarity: str | None = None, limit: int
             continue
         items.append((sid, data))
 
-    def _sort_key(pair):
-        _, data = pair
-        return (data.get("times_seen", 0), data.get("last_seen", ""))
-
-    items.sort(key=_sort_key, reverse=True)
+    now = datetime.now()
+    items.sort(key=lambda pair: _weak_point_weight(pair[1], now), reverse=True)
     return items[:limit]
 
 
