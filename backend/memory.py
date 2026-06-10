@@ -390,6 +390,23 @@ def _active_knowledge_weak_points(profile: dict) -> list[dict]:
     ]
 
 
+def _top_consolidated_patterns(profile: dict, limit: int = 3) -> list[str]:
+    """Active consolidated cross-domain patterns, highest confidence first.
+
+    Stage 3 产出的规律 source="consolidated"，不在 observed/predicted 两个过滤里，
+    必须显式取出注入 prompt，否则只写不读。
+    """
+    patterns = [
+        w for w in profile.get("weak_points", [])
+        if w.get("source") == "consolidated" and not w.get("improved") and not w.get("archived")
+    ]
+    patterns.sort(
+        key=lambda w: (w.get("confidence", 0.7), w.get("last_seen", "")),
+        reverse=True,
+    )
+    return [w["point"] for w in patterns[:limit]]
+
+
 def _top_behavior_signals(profile: dict, polarity: str | None = None, limit: int = 6) -> list[tuple[str, dict]]:
     """Top behavior_signals sorted by recency × times_seen.
 
@@ -433,6 +450,10 @@ def get_profile_summary(user_id: str) -> str:
         if predicted:
             parts.append(f"潜在知识薄弱点（JD分析预测）: {', '.join(predicted)}")
 
+    consolidated = _top_consolidated_patterns(profile)
+    if consolidated:
+        parts.append("跨领域规律（系统从多次训练归纳）:\n  - " + "\n  - ".join(consolidated))
+
     if profile.get("strong_points"):
         points = ", ".join(s["point"] for s in profile["strong_points"][:5])
         parts.append(f"知识强项: {points}")
@@ -474,7 +495,11 @@ def get_profile_summary_for_drill(user_id: str) -> str:
     profile = _load_profile(user_id)
     parts = []
 
-    # behavior_signals 是天然跨 topic 的,直接注入 top N
+    # consolidated patterns 和 behavior_signals 都是天然跨 topic 的,直接注入 top N
+    consolidated = _top_consolidated_patterns(profile)
+    if consolidated:
+        parts.append("跨领域规律（系统从多次训练归纳）:\n  - " + "\n  - ".join(consolidated))
+
     top_behaviors = _top_behavior_signals(profile, polarity="negative", limit=3)
     if top_behaviors:
         lines = [
