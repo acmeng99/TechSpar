@@ -548,6 +548,67 @@ def get_profile_summary_for_drill(user_id: str) -> str:
     return "\n".join(parts) if parts else "新用户，暂无历史数据"
 
 
+def _compact_profile_for_extract(profile: dict) -> str:
+    """Stage 1 Extract prompt 的紧凑画像视图。
+
+    全量 json.dumps(profile) 会把 archived 条目、整个 score_history、behavior
+    examples 全部塞进 prompt，随使用量无界膨胀，且旧数据会锚定 LLM。
+    只注入活跃子集；behavior_signals 不在这里——prompt 有独立的
+    existing_behavior_signals 区块。
+    """
+    parts = []
+    if profile.get("target_role"):
+        parts.append(f"目标岗位: {profile['target_role']}")
+
+    now = datetime.now()
+    active_weak = _active_knowledge_weak_points(profile)
+    observed = sorted(
+        (w for w in active_weak if w.get("source", "observed") == "observed"),
+        key=lambda w: _weak_point_weight(w, now),
+        reverse=True,
+    )[:10]
+    if observed:
+        lines = [
+            f"- {w['point']} (领域: {w.get('topic', '?')}, 出现 {w.get('times_seen', 1)} 次)"
+            for w in observed
+        ]
+        parts.append("活跃知识薄弱点:\n" + "\n".join(lines))
+
+    consolidated = _top_consolidated_patterns(profile)
+    if consolidated:
+        parts.append("跨领域规律:\n" + "\n".join(f"- {p}" for p in consolidated))
+
+    if profile.get("strong_points"):
+        recent_strong = sorted(
+            profile["strong_points"],
+            key=lambda s: s.get("first_seen", ""),
+            reverse=True,
+        )[:5]
+        parts.append("知识强项: " + ", ".join(s["point"] for s in recent_strong))
+
+    if profile.get("topic_mastery"):
+        lines = []
+        for t, v in profile["topic_mastery"].items():
+            score = v.get("score", v.get("level", 0) * 20)
+            notes = (v.get("notes") or "")[:50]
+            lines.append(f"- {t}: {score}/100" + (f" — {notes}" if notes else ""))
+        parts.append("领域掌握度:\n" + "\n".join(lines))
+
+    if profile.get("communication", {}).get("style"):
+        parts.append(f"沟通风格: {profile['communication']['style']}")
+    tp = profile.get("thinking_patterns", {})
+    if tp.get("gaps"):
+        parts.append("思维短板: " + ", ".join(tp["gaps"][:5]))
+    if tp.get("strengths"):
+        parts.append("思维优势: " + ", ".join(tp["strengths"][:5]))
+
+    stats = profile.get("stats", {})
+    if stats.get("total_sessions"):
+        parts.append(f"已完成 {stats['total_sessions']} 次训练, 综合平均分 {stats.get('avg_score', '?')}")
+
+    return "\n\n".join(parts) if parts else "新用户，暂无历史画像"
+
+
 # ── Mem0-style LLM profile update ──
 
 from backend.utils import parse_json_response as _parse_json_safe  # noqa: E402
@@ -1285,7 +1346,7 @@ async def update_profile_after_interview(
         )
 
     extract_msg = EXTRACT_PROMPT.format(
-        current_profile=json.dumps(profile, ensure_ascii=False),
+        current_profile=_compact_profile_for_extract(profile),
         existing_behavior_signals=_format_existing_behavior_signals(profile),
         mode=mode,
         topic=topic or "综合",
