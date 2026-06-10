@@ -6,6 +6,7 @@
 - 向量召回（embedding）：语义搜索历史洞察
 """
 import asyncio
+import copy
 import json
 import logging
 import math
@@ -250,7 +251,8 @@ def _load_profile(user_id: str) -> dict:
     path = _profile_path(user_id)
     if path.exists():
         return json.loads(path.read_text(encoding="utf-8"))
-    return DEFAULT_PROFILE.copy()
+    # deepcopy: 浅拷贝会让所有新用户共享嵌套 list/dict，写入互相污染
+    return copy.deepcopy(DEFAULT_PROFILE)
 
 
 def _save_profile(profile: dict, user_id: str):
