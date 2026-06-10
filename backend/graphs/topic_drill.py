@@ -9,7 +9,7 @@ from backend.indexer import (
     retrieve_topic_context, load_topics, get_topic_knowledge,
     load_topic_documents, KNOWLEDGE_CHAR_BUDGET,
 )
-from backend.memory import get_profile_summary, get_profile_summary_for_drill, get_topic_context_for_drill
+from backend.memory import get_profile_summary_for_drill, get_topic_context_for_drill
 from backend.prompts.interviewer import DRILL_QUESTION_GEN_PROMPT, DRILL_BATCH_EVAL_PROMPT
 
 
