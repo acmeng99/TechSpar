@@ -23,3 +23,23 @@ jobs:
       - name: 构建后端 app(导入整棵依赖树 + 装配路由)
         run: |
           python -c "from backend.app import create_app; create_app(); print('OK app builds')"
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22" # 与 frontend/Dockerfile 的基础镜像一致
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: 安装依赖(npm ci:严格按 lockfile,顺带查 lock 是否同步)
+        run: npm ci
+
+      - name: 构建前端(vite build,拦语法错误/坏 import/漏装依赖)
+        run: npm run build
