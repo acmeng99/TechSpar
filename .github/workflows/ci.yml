@@ -21,4 +21,5 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: 构建后端 app(导入整棵依赖树 + 装配路由)
-        run: python -c "from backend.app import create_app; create_app(); print('OK: app builds')"
+        run: |
+          python -c "from backend.app import create_app; create_app(); print('OK app builds')"
